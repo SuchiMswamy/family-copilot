@@ -1,13 +1,25 @@
+
 import streamlit as st
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from uuid import uuid4
 import html
 
 # ============================================================
-# Our Family Hub — enhanced edition
-# Features: persistent-in-session checkboxes, hug celebration
-# when groceries are bought, gentle overdue nudges, priorities,
-# due dates, progress, streak-like wins, notes, and appointments.
+# OUR FAMILY HUB — SUCHI & ABI 💗
+# Single-file Streamlit application
+#
+# Features:
+# - 10 colour themes
+# - Animated Suchi & Abi couple
+# - Happy, sleepy, hugging and party moods
+# - Tasks, priorities, due dates and overdue nudges
+# - Grocery list and shopping history
+# - Family progress dashboard
+# - Appointments and family notes
+# - Responsive styling and reduced-motion support
+#
+# Data is stored in Streamlit session state.
+# It is NOT yet shared or permanently saved in Supabase.
 # ============================================================
 
 st.set_page_config(
@@ -17,7 +29,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ---------- Theme palettes ----------
+# -------------------- THEMES --------------------
+
 THEMES = {
     "Pastel Dreams": {
         "bg": "#FFF9FC", "text": "#594657", "surface": "#FFFFFF",
@@ -71,389 +84,1005 @@ THEMES = {
     },
 }
 
-# ---------- Session data ----------
-for key, default in {
+# -------------------- SESSION DATA --------------------
+
+DEFAULTS = {
     "tasks": [],
     "groceries": [],
     "appointments": [],
     "family_notes": [],
-    "recent_celebration": None,
-    "completed_total": 0,
-}.items():
-    if key not in st.session_state:
-        st.session_state[key] = default
+    "shopping_history": [],
+    "last_celebration": None,
+    "celebration_id": None,
+    "celebration_counter": 0,
+    "total_completed": 0,
+}
 
-def new_item(name, priority="Normal", due=None):
-    now = datetime.now()
+for key, value in DEFAULTS.items():
+    if key not in st.session_state:
+        st.session_state[key] = value.copy() if isinstance(value, list) else value
+
+
+def make_item(name, priority="Normal", due=None):
     return {
         "id": str(uuid4()),
         "name": name.strip(),
         "checked": False,
-        "created_at": now,
+        "created_at": datetime.now(),
         "checked_at": None,
         "priority": priority,
         "due": due,
     }
 
+
 def age_days(item):
     created = item.get("created_at")
-    if not created:
+    if not isinstance(created, datetime):
         return 0
-    if isinstance(created, date) and not isinstance(created, datetime):
-        created = datetime.combine(created, datetime.min.time())
     return max(0, (datetime.now() - created).days)
 
-def render_hug(message="Shopping mission accomplished!"):
-    st.markdown(f"""
-    <div class="hug-scene">
-      <div class="sparkle s1">✨</div><div class="sparkle s2">💗</div>
-      <div class="hug-people">
-        <div class="person girl"><span class="hair">●</span><span class="face">☺</span><span class="body">♥</span></div>
-        <div class="person boy"><span class="hair">●</span><span class="face">☺</span><span class="body">♥</span></div>
-        <div class="hug-heart">💞</div>
-      </div>
-      <div class="hug-message">{html.escape(message)}</div>
-      <div class="hug-subtitle">Teamwork looks good on you two 🥹</div>
-    </div>
-    """, unsafe_allow_html=True)
 
-def show_item_list(items, kind, prefix):
-    """Checkboxes are keyed by stable item IDs, so checking one won't shift others."""
+def family_mood():
+    items = st.session_state.tasks + st.session_state.groceries
+
     if not items:
-        st.info("Nothing here right now. Enjoy the breathing room! 🌿")
-        return
+        return (
+            "happy", "😊",
+            "Suchi and Abi are ready for a fresh start!",
+        )
 
-    overdue_count = 0
-    for item in sorted(items, key=lambda x: (x["checked"], x.get("due") or date.max, x["created_at"])):
-        item_id = item["id"]
-        label = item["name"]
-        days_old = age_days(item)
-        overdue = not item["checked"] and days_old >= 3
-        due_date = item.get("due")
-        past_due = not item["checked"] and due_date and due_date < date.today()
-        if overdue or past_due:
-            overdue_count += 1
+    unfinished = [item for item in items if not item["checked"]]
 
-        left, middle, right = st.columns([0.08, 0.72, 0.20])
-        with left:
-            checked_now = st.checkbox(
-                "Done",
-                value=item["checked"],
-                key=f"{prefix}_check_{item_id}",
-                label_visibility="collapsed",
-            )
-        if checked_now != item["checked"]:
-            item["checked"] = checked_now
-            item["checked_at"] = datetime.now() if checked_now else None
-            if checked_now:
-                st.session_state.completed_total += 1
-                if kind == "grocery":
-                    st.session_state.recent_celebration = f"You bought {label}!"
-                st.rerun()
-        with middle:
-            safe_name = html.escape(label)
-            if item["checked"]:
-                st.markdown(f"<div class='item-name completed'>{safe_name}</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div class='item-name'>{safe_name}</div>", unsafe_allow_html=True)
-            details = []
-            if item.get("priority") and item["priority"] != "Normal":
-                details.append(f"Priority: {item['priority']}")
-            if due_date:
-                details.append(f"Due {due_date.strftime('%d %b')}")
-            if item["checked"] and item.get("checked_at"):
-                details.append("Done ✓")
-            elif overdue:
-                details.append(f"Waiting {days_old} days")
-            if past_due:
-                details.append("Past due")
-            if details:
-                st.caption(" · ".join(details))
-            if overdue or past_due:
-                st.markdown(
-                    "<div class='gentle-nudge'>🥺 This has been waiting a while. "
-                    "Could you tackle it today, or change its due date?</div>",
-                    unsafe_allow_html=True,
-                )
-        with right:
-            if st.button("Remove", key=f"{prefix}_remove_{item_id}"):
-                items[:] = [x for x in items if x["id"] != item_id]
-                st.rerun()
-        st.divider()
+    if not unfinished:
+        return (
+            "party", "🥳",
+            "EVERYTHING IS DONE! Suchi and Abi are celebrating!",
+        )
 
-    if overdue_count:
-        st.caption(f"💛 A gentle nudge: {overdue_count} item(s) may need a little attention.")
+    neglected = [
+        item for item in unfinished
+        if age_days(item) >= 3
+    ]
 
-# ---------- Theme selector ----------
+    if neglected:
+        return (
+            "sleepy", "😴",
+            f"Suchi and Abi are getting sleepy! "
+            f"{len(neglected)} item(s) have been waiting for 3 days.",
+        )
+
+    return (
+        "happy", "😊",
+        "We're doing great, one little step at a time!",
+    )
+
+
+def show_couple(mood, message):
+    """Draw the animated couple using inline CSS and HTML."""
+    expression = {
+        "happy": ("☺", "☺"),
+        "sleepy": ("😴", "😴"),
+        "hug": ("☺", "☺"),
+        "party": ("🥳", "🥳"),
+    }
+    girl_face, boy_face = expression.get(mood, ("☺", "☺"))
+
+    st.markdown(
+        f"""
+        <div class="couple-scene mood-{mood}">
+            <div class="floating heart-one">💗</div>
+            <div class="floating heart-two">✨</div>
+            <div class="floating heart-three">💕</div>
+
+            <div class="couple">
+                <div class="character girl">
+                    <div class="hair"></div>
+                    <div class="face">{girl_face}</div>
+                    <div class="body"></div>
+                    <div class="character-name">Suchi 🌸</div>
+                </div>
+
+                <div class="character boy">
+                    <div class="hair"></div>
+                    <div class="face">{boy_face}</div>
+                    <div class="body"></div>
+                    <div class="character-name">Abi 💙</div>
+                </div>
+            </div>
+
+            <div class="mood-message">{html.escape(message)}</div>
+            <div class="mood-caption">
+                {'Confetti time! 🎉' if mood == 'party'
+                 else 'Sending you a little love 💞' if mood == 'hug'
+                 else 'A gentle reminder, not a guilt trip 💛' if mood == 'sleepy'
+                 else 'Small steps, big love 🏡'}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def celebrate(message, event_id=None):
+    st.session_state.last_celebration = message
+    st.session_state.celebration_id = event_id or str(uuid4())
+    st.session_state.celebration_counter += 1
+
+
+def add_shopping_record(item):
+    st.session_state.shopping_history.insert(
+        0,
+        {
+            "name": item["name"],
+            "bought_at": datetime.now(),
+        },
+    )
+
+
+# -------------------- THEME SELECTOR --------------------
+
 with st.sidebar:
     st.markdown("# 🏡 Our Family Hub")
     st.caption("A little more organised, a little less stressed.")
-    theme_name = st.selectbox("🎨 Choose your theme", list(THEMES.keys()), key="family_theme")
+
+    theme_name = st.selectbox(
+        "🎨 Choose your theme",
+        list(THEMES.keys()),
+        key="family_theme",
+    )
 
 theme = THEMES[theme_name]
-bg, text_color, surface = theme["bg"], theme["text"], theme["surface"]
+bg = theme["bg"]
+text_color = theme["text"]
+surface = theme["surface"]
 a0, a1, a2, a3 = theme["accents"]
 button_text = theme["button_text"]
 
-st.markdown(f"""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
-.stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
-    background: {bg} !important; color: {text_color} !important;
-    font-family: 'DM Sans', sans-serif;
-}}
-[data-testid="stSidebar"] {{ background:{surface}!important; border-right:1px solid {a1}!important; }}
-[data-testid="stSidebar"] * {{ color:{text_color}; }}
-h1,h2,h3 {{ color:{text_color}!important; font-family:'Playfair Display',Georgia,serif!important; }}
-h1 {{ font-size:2.5rem!important; }}
-p,label,[data-testid="stMarkdownContainer"] {{ color:{text_color}; }}
-.hero {{ background:linear-gradient(120deg,{a0},{a3}); padding:30px 32px; border-radius:22px; border:1px solid {a1}; margin:12px 0 24px; }}
-.hero h1,.hero p,.hero .eyebrow {{ color:{text_color}!important; }}
-.eyebrow {{ text-transform:uppercase; letter-spacing:2px; font-size:.75rem; font-weight:700; }}
-.metric-card {{ background:{surface}; border:1px solid {a1}; border-radius:18px; padding:18px; min-height:112px; }}
-.metric-label {{ font-size:.9rem; }} .metric-value {{ font:600 2rem 'Playfair Display',Georgia,serif; margin-top:6px; }}
-div.stButton>button, div[data-testid="stFormSubmitButton"] button {{ background:{a2}!important; color:{button_text}!important; border:1px solid {a1}!important; border-radius:11px; min-height:44px; font-weight:600; }}
-div[data-testid="stForm"] {{ background:{surface}; border:1px solid {a1}; border-radius:16px; padding:18px; }}
-input,textarea,[data-baseweb="input"],[data-baseweb="select"] {{ border-radius:10px!important; }}
-[data-testid="stCheckbox"] label,[data-testid="stCheckbox"] p {{ color:{text_color}!important; }}
-hr {{ border-color:{a1}!important; }}
-.item-name {{ font-size:1.02rem; font-weight:600; padding-top:4px; overflow-wrap:anywhere; }}
-.completed {{ text-decoration:line-through; opacity:.55; }}
-.gentle-nudge {{ display:inline-block; background:{a0}; border:1px solid {a1}; border-radius:10px; padding:7px 10px; font-size:.86rem; margin:3px 0 5px; }}
-.hug-scene {{ position:relative; overflow:hidden; text-align:center; padding:18px; margin:12px 0 22px; border-radius:22px; background:linear-gradient(135deg,{a0},{a3}); border:1px solid {a1}; }}
-.hug-people {{ height:120px; position:relative; display:flex; align-items:center; justify-content:center; gap:0; }}
-.person {{ position:relative; width:82px; height:100px; animation:bounce 1.1s ease-in-out infinite alternate; }}
-.person .hair {{ position:absolute; top:2px; left:27px; font-size:40px; color:#5b3a2e; }}
-.person .face {{ position:absolute; top:17px; left:29px; font-size:29px; color:#5b3a2e; z-index:2; }}
-.person .body {{ position:absolute; top:49px; left:17px; font-size:58px; color:#e78bab; }}
-.boy .body {{ color:#83b9d5; }} .boy {{ animation-delay:.15s; }}
-.hug-heart {{ position:absolute; left:calc(50% - 17px); top:35px; font-size:32px; animation:heartbeat .75s ease-in-out infinite; }}
-.sparkle {{ position:absolute; font-size:24px; animation:floaty 2s ease-in-out infinite; }}
-.s1 {{ left:18%; top:18px; }} .s2 {{ right:18%; top:24px; animation-delay:.4s; }}
-.hug-message {{ font-size:1.2rem; font-weight:700; }} .hug-subtitle {{ font-size:.9rem; margin-top:3px; }}
-@keyframes bounce {{ from {{ transform:translateY(2px) rotate(-3deg); }} to {{ transform:translateY(-5px) rotate(3deg); }} }}
-@keyframes heartbeat {{ 0%,100% {{ transform:scale(1); }} 50% {{ transform:scale(1.25); }} }}
-@keyframes floaty {{ 0%,100% {{ transform:translateY(0); }} 50% {{ transform:translateY(-10px); }} }}
-@media(max-width:768px) {{
- .block-container {{ padding:.8rem .8rem 2rem!important; }}
- h1 {{ font-size:1.85rem!important; }}
- .hero {{ padding:20px 16px; border-radius:16px; }}
- .metric-card {{ padding:14px; margin-bottom:8px; min-height:auto; }}
- .metric-value {{ font-size:1.65rem; }}
- div[data-testid="stForm"] {{ padding:12px; }}
- div.stButton>button,div[data-testid="stFormSubmitButton"] button {{ min-height:46px; white-space:normal; }}
- [data-testid="stHorizontalBlock"] {{ gap:.5rem!important; }}
-}}
-@media(prefers-reduced-motion: reduce) {{
- .person,.hug-heart,.sparkle {{ animation:none!important; }}
-}}
-</style>
-""", unsafe_allow_html=True)
+# -------------------- STYLING --------------------
 
-# ---------- Header and navigation ----------
+st.markdown(
+    f"""
+    <style>
+    @import url(
+      'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap'
+    );
+
+    .stApp, [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"] {{
+        background: {bg} !important;
+        color: {text_color} !important;
+        font-family: 'DM Sans', sans-serif;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background: {surface} !important;
+        border-right: 1px solid {a1} !important;
+    }}
+
+    [data-testid="stSidebar"] * {{
+        color: {text_color};
+    }}
+
+    h1, h2, h3 {{
+        color: {text_color} !important;
+        font-family: 'Playfair Display', Georgia, serif !important;
+    }}
+
+    p, label, [data-testid="stMarkdownContainer"] {{
+        color: {text_color};
+    }}
+
+    .hero {{
+        background: linear-gradient(120deg, {a0}, {a3});
+        padding: 28px;
+        border-radius: 22px;
+        border: 1px solid {a1};
+        margin: 12px 0 22px;
+    }}
+
+    .hero h1, .hero p {{
+        color: {text_color} !important;
+    }}
+
+    .metric-card {{
+        background: {surface};
+        border: 1px solid {a1};
+        border-radius: 18px;
+        padding: 18px;
+        min-height: 110px;
+    }}
+
+    .metric-value {{
+        font: 600 2rem 'Playfair Display', Georgia, serif;
+        margin-top: 6px;
+    }}
+
+    div.stButton > button,
+    div[data-testid="stFormSubmitButton"] button {{
+        background: {a2} !important;
+        color: {button_text} !important;
+        border: 1px solid {a1} !important;
+        border-radius: 11px;
+        min-height: 44px;
+        font-weight: 600;
+    }}
+
+    div[data-testid="stForm"] {{
+        background: {surface};
+        border: 1px solid {a1};
+        border-radius: 16px;
+        padding: 16px;
+    }}
+
+    [data-testid="stCheckbox"] label,
+    [data-testid="stCheckbox"] p {{
+        color: {text_color} !important;
+    }}
+
+    .item-name {{
+        font-size: 1rem;
+        font-weight: 600;
+        padding-top: 5px;
+        overflow-wrap: anywhere;
+    }}
+
+    .completed {{
+        text-decoration: line-through;
+        opacity: .55;
+    }}
+
+    .gentle-nudge {{
+        background: {a0};
+        border: 1px solid {a1};
+        border-radius: 10px;
+        padding: 8px;
+        font-size: .85rem;
+        margin: 4px 0;
+    }}
+
+    /* Animated Suchi & Abi */
+    .couple-scene {{
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+        padding: 18px;
+        margin: 12px 0 22px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, {a0}, {a3});
+        border: 1px solid {a1};
+    }}
+
+    .couple {{
+        height: 150px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+    }}
+
+    .character {{
+        width: 92px;
+        height: 125px;
+        position: relative;
+        animation: bob 1.2s ease-in-out infinite alternate;
+    }}
+
+    .character .hair {{
+        position: absolute;
+        top: 5px;
+        left: 26px;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: #654333;
+        z-index: 1;
+    }}
+
+    .character .face {{
+        position: absolute;
+        top: 15px;
+        left: 27px;
+        width: 40px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #FFD8BB;
+        border-radius: 45%;
+        font-size: 23px;
+        z-index: 2;
+    }}
+
+    .character .body {{
+        position: absolute;
+        top: 49px;
+        left: 14px;
+        width: 66px;
+        height: 62px;
+        border-radius: 28px 28px 14px 14px;
+        background: #E78BAB;
+    }}
+
+    .boy .body {{
+        background: #83B9D5;
+    }}
+
+    .boy {{
+        animation-delay: .2s;
+    }}
+
+    .character-name {{
+        position: absolute;
+        top: 112px;
+        width: 100%;
+        font-weight: 700;
+        font-size: .82rem;
+    }}
+
+    .floating {{
+        position: absolute;
+        font-size: 24px;
+        animation: float 2s ease-in-out infinite;
+    }}
+
+    .heart-one {{ top: 15px; left: 18%; }}
+    .heart-two {{ top: 35px; right: 20%; animation-delay: .4s; }}
+    .heart-three {{ bottom: 48px; left: 28%; animation-delay: .7s; }}
+
+    .mood-message {{
+        font-size: 1.12rem;
+        font-weight: 700;
+        margin-top: 8px;
+    }}
+
+    .mood-caption {{
+        font-size: .88rem;
+        margin-top: 4px;
+    }}
+
+    .mood-hug .girl {{
+        animation: hug-girl .7s ease-in-out infinite alternate;
+    }}
+
+    .mood-hug .boy {{
+        animation: hug-boy .7s ease-in-out infinite alternate;
+    }}
+
+    .mood-sleepy .character {{
+        animation: sleepy 2s ease-in-out infinite alternate;
+    }}
+
+    .mood-party .character {{
+        animation: dance .45s ease-in-out infinite alternate;
+    }}
+
+    @keyframes bob {{
+        from {{ transform: translateY(2px); }}
+        to {{ transform: translateY(-6px); }}
+    }}
+
+    @keyframes float {{
+        0%, 100% {{ transform: translateY(0) rotate(-5deg); }}
+        50% {{ transform: translateY(-12px) rotate(8deg); }}
+    }}
+
+    @keyframes hug-girl {{
+        from {{ transform: translateX(0) rotate(-4deg); }}
+        to {{ transform: translateX(15px) rotate(5deg); }}
+    }}
+
+    @keyframes hug-boy {{
+        from {{ transform: translateX(0) rotate(4deg); }}
+        to {{ transform: translateX(-15px) rotate(-5deg); }}
+    }}
+
+    @keyframes sleepy {{
+        from {{ transform: translateY(2px) rotate(-2deg); }}
+        to {{ transform: translateY(8px) rotate(2deg); }}
+    }}
+
+    @keyframes dance {{
+        from {{ transform: translateY(0) rotate(-8deg); }}
+        to {{ transform: translateY(-12px) rotate(8deg); }}
+    }}
+
+    @media (max-width: 768px) {{
+        .block-container {{
+            padding: .8rem .8rem 2rem !important;
+        }}
+
+        h1 {{ font-size: 1.85rem !important; }}
+
+        .hero {{
+            padding: 18px;
+            border-radius: 16px;
+        }}
+
+        .metric-card {{
+            min-height: auto;
+            padding: 14px;
+            margin-bottom: 8px;
+        }}
+
+        .couple-scene {{ padding: 12px; }}
+
+        div.stButton > button,
+        div[data-testid="stFormSubmitButton"] button {{
+            min-height: 46px;
+            white-space: normal;
+        }}
+    }}
+
+    @media (prefers-reduced-motion: reduce) {{
+        .character, .floating {{
+            animation: none !important;
+        }}
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -------------------- NAVIGATION --------------------
+
 st.markdown("## 🏡 Our Family Hub")
 st.caption("A little more organised, a little less stressed.")
-pages = ["✨ Home", "✅ To-do list", "🛒 Groceries", "📅 Appointments", "💌 Family Notes & Messages"]
-page = st.selectbox("📍 Where would you like to go?", pages, key="main_page_navigation")
+
+pages = [
+    "✨ Home",
+    "✅ To-do list",
+    "🛒 Groceries",
+    "📅 Appointments",
+    "💌 Family Notes & Messages",
+    "🧾 Shopping History",
+]
+
+page = st.selectbox(
+    "📍 Where would you like to go?",
+    pages,
+    key="main_page_navigation",
+)
+
 st.divider()
 
-# ---------- Home ----------
+# -------------------- HOME --------------------
+
 if page == "✨ Home":
-    st.markdown("""
-    <div class="hero">
-      <div class="eyebrow">YOUR FAMILY DASHBOARD</div>
-      <h1>A calmer kind of busy.</h1>
-      <p>Keep track of the little things, so you have more time for the big things.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="hero">
+            <p>YOUR FAMILY DASHBOARD</p>
+            <h1>A calmer kind of busy. 💗</h1>
+            <p>Little things, big love, one family at a time.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    open_tasks = sum(not x["checked"] for x in st.session_state.tasks)
-    open_groceries = sum(not x["checked"] for x in st.session_state.groceries)
-    upcoming = sum(x["date"] >= date.today() for x in st.session_state.appointments)
+    mood, emoji, message = family_mood()
+    show_couple(mood, message)
+
+    tasks = st.session_state.tasks
+    groceries = st.session_state.groceries
+    appointments = st.session_state.appointments
+
+    open_tasks = sum(not x["checked"] for x in tasks)
+    open_groceries = sum(not x["checked"] for x in groceries)
+    upcoming = sum(x["date"] >= date.today() for x in appointments)
+
     c1, c2, c3 = st.columns(3)
-    for col, label, value, note in [
-        (c1, "✅ Tasks left", open_tasks, "One step at a time"),
-        (c2, "🛒 To buy", open_groceries, "Your shopping reminders"),
-        (c3, "📅 Upcoming", upcoming, "Dates on the calendar"),
-    ]:
+
+    metrics = [
+        (c1, "✅ Tasks left", open_tasks),
+        (c2, "🛒 Items to buy", open_groceries),
+        (c3, "📅 Upcoming events", upcoming),
+    ]
+
+    for col, label, value in metrics:
         with col:
-            st.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div><div>{note}</div></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div>{label}</div>
+                    <div class="metric-value">{value}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-    all_count = len(st.session_state.tasks) + len(st.session_state.groceries)
-    done_count = sum(x["checked"] for x in st.session_state.tasks + st.session_state.groceries)
+    total = len(tasks) + len(groceries)
+    completed = sum(x["checked"] for x in tasks + groceries)
+
     st.markdown("### 🌈 Family progress")
-    progress = done_count / all_count if all_count else 0
-    st.progress(progress, text=f"{done_count} of {all_count} checklist items completed" if all_count else "Add your first item to start your family progress bar.")
-    if all_count and progress == 1:
-        st.success("Everything on your current lists is done. Tiny victory dance! 💃🕺")
 
-    left, right = st.columns(2, gap="large")
+    st.progress(
+        completed / total if total else 0.0,
+        text=(
+            f"{completed} of {total} checklist items completed"
+            if total else "Add your first item to begin!"
+        ),
+    )
+
+    if total and completed == total:
+        st.success("🎉 Family victory! Everything is checked off!")
+        # Avoid triggering balloons on every unrelated rerun.
+        if st.session_state.celebration_id != "all-done":
+            st.session_state.celebration_id = "all-done"
+            st.balloons()
+
+    left, right = st.columns(2)
+
     with left:
         st.markdown("### 🌿 Quick-add a task")
+
         with st.form("home_task_form", clear_on_submit=True):
-            task = st.text_input("What needs doing?", placeholder="e.g. Pick up a prescription")
-            priority = st.selectbox("Priority", ["Normal", "High", "Whenever"])
-            due = st.date_input("Optional due date", value=None, key="home_task_due")
-            submitted = st.form_submit_button("＋ Add task", use_container_width=True)
-        if submitted and task.strip():
-            st.session_state.tasks.append(new_item(task, priority, due))
-            st.toast("Task added 🌱")
+            task_name = st.text_input(
+                "Task",
+                placeholder="e.g. Book the dentist",
+            )
+            priority = st.selectbox(
+                "Priority",
+                ["Normal", "High", "Whenever"],
+            )
+            due = st.date_input(
+                "Due date",
+                value=None,
+                key="home_due_date",
+            )
+            add_task = st.form_submit_button("＋ Add task")
+
+        if add_task and task_name.strip():
+            st.session_state.tasks.append(
+                make_item(task_name, priority, due)
+            )
             st.rerun()
-        with st.form("home_grocery_form", clear_on_submit=True):
-            grocery = st.text_input("What are we running out of?", placeholder="e.g. Milk, bananas")
-            submitted_grocery = st.form_submit_button("＋ Add grocery", use_container_width=True)
-        if submitted_grocery and grocery.strip():
-            st.session_state.groceries.append(new_item(grocery))
-            st.rerun()
+
     with right:
-        st.markdown("### 🥹 Little reminders")
-        aged = sum(not x["checked"] and age_days(x) >= 3 for x in st.session_state.tasks + st.session_state.groceries)
-        if aged:
-            st.warning(f"{aged} item(s) have been waiting for 3 days or more. No guilt—just a gentle nudge to review them.")
-        else:
-            st.info("No lingering checklist items right now. You're doing fine. 💛")
-        if st.session_state.recent_celebration:
-            render_hug(st.session_state.recent_celebration)
-            if st.button("Aww, thank you 💗", key="dismiss_hug"):
-                st.session_state.recent_celebration = None
-                st.rerun()
+        st.markdown("### 🥑 Quick-add groceries")
+
+        with st.form("home_grocery_form", clear_on_submit=True):
+            grocery_name = st.text_input(
+                "Grocery",
+                placeholder="e.g. Milk and bananas",
+            )
+            add_grocery = st.form_submit_button("＋ Add grocery")
+
+        if add_grocery and grocery_name.strip():
+            st.session_state.groceries.append(
+                make_item(grocery_name)
+            )
+            st.rerun()
 
     st.markdown("### 📅 Coming up")
-    upcoming_items = sorted([x for x in st.session_state.appointments if x["date"] >= date.today()], key=lambda x: x["date"])
-    if upcoming_items:
-        for event in upcoming_items[:5]:
+
+    upcoming_events = sorted(
+        [
+            event for event in appointments
+            if event["date"] >= date.today()
+        ],
+        key=lambda event: event["date"],
+    )
+
+    if upcoming_events:
+        for event in upcoming_events[:5]:
             days = (event["date"] - date.today()).days
-            timing = "Today 🎉" if days == 0 else "Tomorrow 🌷" if days == 1 else f"In {days} days"
-            st.markdown(f"**{html.escape(event['name'])}** · {event['date'].strftime('%d %b %Y')}  \n<small>{timing}</small>", unsafe_allow_html=True)
+
+            if days == 0:
+                when = "Today 🎉"
+            elif days == 1:
+                when = "Tomorrow 🌷"
+            else:
+                when = f"In {days} days"
+
+            st.markdown(
+                f"**{html.escape(event['name'])}** · "
+                f"{event['date'].strftime('%d %b %Y')} · {when}"
+            )
     else:
         st.caption("No upcoming appointments yet.")
 
-# ---------- To-do list ----------
+    if st.session_state.last_celebration:
+        st.success(st.session_state.last_celebration)
+
+# -------------------- TO-DO LIST --------------------
+
 elif page == "✅ To-do list":
-    st.markdown("<div class='eyebrow'>THE FAMILY CHECKLIST</div>", unsafe_allow_html=True)
     st.title("One thing at a time. 🌱")
-    st.write("Add a task, set a priority or due date, then check it off when it's done.")
+
     with st.form("task_form", clear_on_submit=True):
-        task = st.text_input("New task", placeholder="e.g. Book the dentist")
-        c1, c2 = st.columns(2)
-        with c1:
-            priority = st.selectbox("Priority", ["Normal", "High", "Whenever"])
-        with c2:
-            due = st.date_input("Due date (optional)", value=None, key="task_due")
-        submitted = st.form_submit_button("＋ Add task", use_container_width=True)
-    if submitted and task.strip():
-        st.session_state.tasks.append(new_item(task, priority, due))
-        st.toast("Task added 🌱")
+        task_name = st.text_input(
+            "New task",
+            placeholder="e.g. Water the plants",
+        )
+        col1, col2 = st.columns(2)
+
+        with col1:
+            priority = st.selectbox(
+                "Priority",
+                ["Normal", "High", "Whenever"],
+                key="task_priority",
+            )
+
+        with col2:
+            due = st.date_input(
+                "Due date",
+                value=None,
+                key="task_due",
+            )
+
+        add_task = st.form_submit_button("＋ Add task")
+
+    if add_task and task_name.strip():
+        st.session_state.tasks.append(
+            make_item(task_name, priority, due)
+        )
         st.rerun()
 
-    if st.session_state.tasks:
-        filter_mode = st.radio("Show", ["All", "Open", "Completed"], horizontal=True, key="task_filter")
-        visible = [x for x in st.session_state.tasks if filter_mode == "All" or (filter_mode == "Open" and not x["checked"]) or (filter_mode == "Completed" and x["checked"])]
-        show_item_list(visible, "task", "todo")
-        if st.button("Clear completed tasks"):
-            st.session_state.tasks = [x for x in st.session_state.tasks if not x["checked"]]
+    filter_mode = st.radio(
+        "Show tasks",
+        ["All", "Open", "Completed"],
+        horizontal=True,
+    )
+
+    tasks = st.session_state.tasks
+
+    visible_tasks = [
+        item for item in tasks
+        if filter_mode == "All"
+        or (filter_mode == "Open" and not item["checked"])
+        or (filter_mode == "Completed" and item["checked"])
+    ]
+
+    if not visible_tasks:
+        st.success("No tasks in this view. Take a little breather! 💛")
+
+    for item in visible_tasks:
+        item_id = item["id"]
+
+        left, middle, right = st.columns([0.09, 0.69, 0.22])
+
+        with left:
+            checked = st.checkbox(
+                "Done",
+                value=item["checked"],
+                key=f"task_check_{item_id}",
+                label_visibility="collapsed",
+            )
+
+        if checked != item["checked"]:
+            item["checked"] = checked
+            item["checked_at"] = datetime.now() if checked else None
+
+            if checked:
+                st.session_state.total_completed += 1
+                celebrate(f"Well done! Task completed: {item['name']} 💗")
+
             st.rerun()
-    else:
-        st.success("Nothing on the list yet. Enjoy the breathing room!")
 
-# ---------- Groceries ----------
-elif page == "🛒 Groceries":
-    st.markdown("<div class='eyebrow'>THE SHOPPING LIST</div>", unsafe_allow_html=True)
-    st.title("A little list, a smoother shop. 🥑")
-    st.write("Tick an item when you've bought it and the couple will celebrate with a hug. 💗")
-    with st.form("grocery_form", clear_on_submit=True):
-        grocery = st.text_input("Grocery item", placeholder="e.g. Oats")
-        submitted = st.form_submit_button("＋ Add item", use_container_width=True)
-    if submitted and grocery.strip():
-        st.session_state.groceries.append(new_item(grocery))
-        st.rerun()
+        with middle:
+            label = html.escape(item["name"])
 
-    if st.session_state.recent_celebration:
-        render_hug(st.session_state.recent_celebration)
-        if st.button("Dismiss celebration 💞", key="dismiss_grocery_hug"):
-            st.session_state.recent_celebration = None
-            st.rerun()
-
-    if st.session_state.groceries:
-        bought = sum(x["checked"] for x in st.session_state.groceries)
-        st.progress(bought / len(st.session_state.groceries), text=f"{bought} of {len(st.session_state.groceries)} items bought")
-        show_item_list(st.session_state.groceries, "grocery", "grocery")
-        if st.button("Clear bought items"):
-            st.session_state.groceries = [x for x in st.session_state.groceries if not x["checked"]]
-            st.rerun()
-    else:
-        st.info("Your list is empty. Add your first item above.")
-
-# ---------- Appointments ----------
-elif page == "📅 Appointments":
-    st.markdown("<div class='eyebrow'>FAMILY CALENDAR</div>", unsafe_allow_html=True)
-    st.title("The important dates. 🌷")
-    st.write("Keep appointments and family plans in one place.")
-    with st.form("appointment_form", clear_on_submit=True):
-        name = st.text_input("Appointment or event", placeholder="e.g. Dentist appointment")
-        appointment_date = st.date_input("Date", value=date.today(), key="appointment_date")
-        submitted = st.form_submit_button("＋ Save appointment", use_container_width=True)
-    if submitted and name.strip():
-        st.session_state.appointments.append({"id": str(uuid4()), "name": name.strip(), "date": appointment_date})
-        st.rerun()
-
-    if st.session_state.appointments:
-        for item in sorted(st.session_state.appointments, key=lambda x: x["date"]):
-            days = (item["date"] - date.today()).days
-            if days < 0:
-                status = f"Was {abs(days)} day(s) ago"
-            elif days == 0:
-                status = "Today 🎉"
-            elif days == 1:
-                status = "Tomorrow 🌷"
+            if item["checked"]:
+                st.markdown(
+                    f"<div class='item-name completed'>{label}</div>",
+                    unsafe_allow_html=True,
+                )
             else:
-                status = f"In {days} days"
-            col1, col2 = st.columns([0.78, 0.22])
-            with col1:
-                st.markdown(f"**{html.escape(item['name'])}**")
-                st.caption(f"{item['date'].strftime('%A, %d %B %Y')} · {status}")
-            with col2:
-                if st.button("Remove", key=f"remove_event_{item['id']}"):
-                    st.session_state.appointments = [x for x in st.session_state.appointments if x["id"] != item["id"]]
-                    st.rerun()
-            st.divider()
-    else:
-        st.info("No appointments yet. Add one above to get started.")
+                st.markdown(
+                    f"<div class='item-name'>{label}</div>",
+                    unsafe_allow_html=True,
+                )
 
-# ---------- Notes ----------
-elif page == "💌 Family Notes & Messages":
-    st.markdown("<div class='eyebrow'>YOUR LITTLE FAMILY NOTICEBOARD</div>", unsafe_allow_html=True)
-    st.title("Notes from the heart. 💌")
-    st.write("Leave a kind note, a reminder, or a little thank-you for the family.")
-    with st.form("note_form", clear_on_submit=True):
-        author = st.text_input("From", placeholder="e.g. Mum, Dad, Suchi…")
-        note = st.text_area("Your message", placeholder="Remember to take a break today 💛")
-        submitted = st.form_submit_button("＋ Pin a note", use_container_width=True)
-    if submitted and note.strip():
-        st.session_state.family_notes.insert(0, {
-            "id": str(uuid4()), "author": author.strip() or "Someone in the family",
-            "note": note.strip(), "created_at": datetime.now(),
+            details = []
+
+            if item["priority"] != "Normal":
+                details.append(f"Priority: {item['priority']}")
+
+            if item["due"]:
+                details.append(
+                    f"Due: {item['due'].strftime('%d %b %Y')}"
+                )
+
+            if item["checked"]:
+                details.append("Completed ✓")
+            elif age_days(item) >= 3:
+                details.append(f"Waiting {age_days(item)} days")
+
+            if details:
+                st.caption(" · ".join(details))
+
+            if not item["checked"] and age_days(item) >= 3:
+                st.markdown(
+                    "<div class='gentle-nudge'>"
+                    "🥺 This task has been waiting a while. "
+                    "Could you tackle it today or update its due date?"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if (
+                not item["checked"]
+                and item["due"]
+                and item["due"] < date.today()
+            ):
+                st.warning("This task is past its due date.")
+
+        with right:
+            if st.button("Remove", key=f"task_remove_{item_id}"):
+                st.session_state.tasks = [
+                    x for x in st.session_state.tasks
+                    if x["id"] != item_id
+                ]
+                st.rerun()
+
+        st.divider()
+
+    if st.button("Clear completed tasks"):
+        st.session_state.tasks = [
+            item for item in st.session_state.tasks
+            if not item["checked"]
+        ]
+        st.rerun()
+
+# -------------------- GROCERIES --------------------
+
+elif page == "🛒 Groceries":
+    st.title("A little list, a smoother shop. 🥑")
+    st.write("Tick an item after buying it to celebrate with Suchi and Abi!")
+
+    with st.form("grocery_form", clear_on_submit=True):
+        grocery_name = st.text_input(
+            "Grocery item",
+            placeholder="e.g. Oats",
+        )
+        add_grocery = st.form_submit_button("＋ Add item")
+
+    if add_grocery and grocery_name.strip():
+        st.session_state.groceries.append(
+            make_item(grocery_name)
+        )
+        st.rerun()
+
+    groceries = st.session_state.groceries
+
+    if groceries:
+        bought = sum(item["checked"] for item in groceries)
+
+        st.progress(
+            bought / len(groceries),
+            text=f"{bought} of {len(groceries)} items bought",
+        )
+
+        if bought == len(groceries):
+            show_couple(
+                "party",
+                "Shopping mission complete! Suchi & Abi celebrate! 🎉",
+            )
+
+        for item in groceries:
+            item_id = item["id"]
+            left, middle, right = st.columns([0.09, 0.69, 0.22])
+
+            with left:
+                checked = st.checkbox(
+                    "Bought",
+                    value=item["checked"],
+                    key=f"grocery_check_{item_id}",
+                    label_visibility="collapsed",
+                )
+
+            if checked != item["checked"]:
+                item["checked"] = checked
+                item["checked_at"] = datetime.now() if checked else None
+
+                if checked:
+                    add_shopping_record(item)
+                    celebrate(
+                        f"Suchi and Abi hug! You bought {item['name']}! 💗",
+                        event_id=str(uuid4()),
+                    )
+
+                st.rerun()
+
+            with middle:
+                label = html.escape(item["name"])
+
+                if item["checked"]:
+                    st.markdown(
+                        f"<div class='item-name completed'>{label}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("Bought ✓")
+                else:
+                    st.markdown(
+                        f"<div class='item-name'>{label}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    if age_days(item) >= 3:
+                        st.markdown(
+                            "<div class='gentle-nudge'>"
+                            "🥺 This item has been on the list for a while."
+                            "</div>",
+                            unsafe_allow_html=True,
+                        )
+
+            with right:
+                if st.button("Remove", key=f"grocery_remove_{item_id}"):
+                    st.session_state.groceries = [
+                        x for x in st.session_state.groceries
+                        if x["id"] != item_id
+                    ]
+                    st.rerun()
+
+            st.divider()
+
+        if st.button("Clear bought items"):
+            st.session_state.groceries = [
+                item for item in st.session_state.groceries
+                if not item["checked"]
+            ]
+            st.rerun()
+
+    else:
+        st.info("Your shopping list is empty. Add your first item! 🛒")
+
+    if st.session_state.last_celebration:
+        st.markdown("### 💞 Latest celebration")
+        show_couple("hug", st.session_state.last_celebration)
+
+    if st.button("Reset celebration"):
+        st.session_state.last_celebration = None
+        st.rerun()
+
+# -------------------- APPOINTMENTS --------------------
+
+elif page == "📅 Appointments":
+    st.title("The important dates. 🌷")
+
+    with st.form("appointment_form", clear_on_submit=True):
+        name = st.text_input(
+            "Appointment or event",
+            placeholder="e.g. Dentist appointment",
+        )
+        event_date = st.date_input(
+            "Date",
+            value=date.today(),
+            key="event_date",
+        )
+        save_event = st.form_submit_button("＋ Save appointment")
+
+    if save_event and name.strip():
+        st.session_state.appointments.append({
+            "id": str(uuid4()),
+            "name": name.strip(),
+            "date": event_date,
         })
         st.rerun()
-    if st.session_state.family_notes:
-        for item in st.session_state.family_notes:
-            st.markdown(f"""
-            <div class="metric-card" style="margin:10px 0;min-height:auto">
-              <div style="font-weight:700">💌 {html.escape(item['author'])}</div>
-              <div style="margin:10px 0">{html.escape(item['note']).replace(chr(10), '<br>')}</div>
-              <div style="font-size:.8rem;opacity:.7">{item['created_at'].strftime('%d %b %Y · %H:%M')}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Remove note", key=f"remove_note_{item['id']}"):
-                st.session_state.family_notes = [x for x in st.session_state.family_notes if x["id"] != item["id"]]
-                st.rerun()
-    else:
-        st.info("The noticeboard is blank. Add a little kindness to it. 🌷")
 
-# ---------- Footer ----------
+    events = sorted(
+        st.session_state.appointments,
+        key=lambda event: event["date"],
+    )
+
+    if not events:
+        st.info("No appointments yet. Add one above.")
+
+    for event in events:
+        days = (event["date"] - date.today()).days
+
+        if days < 0:
+            status = f"{abs(days)} day(s) ago"
+        elif days == 0:
+            status = "Today 🎉"
+        elif days == 1:
+            status = "Tomorrow 🌷"
+        else:
+            status = f"In {days} days"
+
+        col1, col2 = st.columns([0.78, 0.22])
+
+        with col1:
+            st.markdown(f"**{html.escape(event['name'])}**")
+            st.caption(
+                f"{event['date'].strftime('%A, %d %B %Y')} · {status}"
+            )
+
+        with col2:
+            if st.button("Remove", key=f"event_remove_{event['id']}"):
+                st.session_state.appointments = [
+                    x for x in st.session_state.appointments
+                    if x["id"] != event["id"]
+                ]
+                st.rerun()
+
+        st.divider()
+
+# -------------------- FAMILY NOTES --------------------
+
+elif page == "💌 Family Notes & Messages":
+    st.title("Notes from the heart. 💌")
+    st.write("Leave a kind message or a little reminder for the family.")
+
+    with st.form("note_form", clear_on_submit=True):
+        author = st.text_input(
+            "From",
+            placeholder="e.g. Suchi",
+        )
+        note = st.text_area(
+            "Message",
+            placeholder="Remember to take a break today 💛",
+        )
+        save_note = st.form_submit_button("＋ Pin a note")
+
+    if save_note and note.strip():
+        st.session_state.family_notes.insert(0, {
+            "id": str(uuid4()),
+            "author": author.strip() or "Someone in the family",
+            "note": note.strip(),
+            "created_at": datetime.now(),
+        })
+        st.rerun()
+
+    if not st.session_state.family_notes:
+        st.info("The family noticeboard is waiting for its first note. 🌷")
+
+    for note in st.session_state.family_notes:
+        st.markdown(
+            f"""
+            <div class="metric-card" style="margin:10px 0;min-height:auto">
+                <strong>💌 {html.escape(note['author'])}</strong>
+                <p>{html.escape(note['note']).replace(chr(10), '<br>')}</p>
+                <small>
+                    {note['created_at'].strftime('%d %b %Y · %H:%M')}
+                </small>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button("Remove note", key=f"note_remove_{note['id']}"):
+            st.session_state.family_notes = [
+                x for x in st.session_state.family_notes
+                if x["id"] != note["id"]
+            ]
+            st.rerun()
+
+# -------------------- SHOPPING HISTORY --------------------
+
+elif page == "🧾 Shopping History":
+    st.title("Little shopping memories. 🛍️")
+    st.write("Every checked-off grocery is recorded here for this session.")
+
+    history = st.session_state.shopping_history
+
+    if not history:
+        st.info("No purchases recorded yet. Your first shopping win goes here!")
+    else:
+        st.metric("Items purchased", len(history))
+
+        for index, purchase in enumerate(history):
+            st.markdown(
+                f"**🛍️ {html.escape(purchase['name'])}**"
+            )
+            st.caption(
+                purchase["bought_at"].strftime("%d %B %Y · %H:%M")
+            )
+            st.divider()
+
+        if st.button("Clear shopping history"):
+            st.session_state.shopping_history = []
+            st.rerun()
+
+# -------------------- FOOTER --------------------
+
 st.divider()
+
 st.markdown(
-    "<p style='text-align:center;opacity:.65;font-size:.82rem'>"
-    "Made with care · Our Family Hub 🏡 · Small steps count.</p>",
+    """
+    <p style="text-align:center;opacity:.7;font-size:.82rem">
+        Made with care · Suchi & Abi's Family Hub 🏡💗
+    </p>
+    """,
     unsafe_allow_html=True,
 )
