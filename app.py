@@ -8,86 +8,209 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------- Design ----------
-st.markdown("""
+
+# ---------- Theme palettes ----------
+THEMES = {
+    "Pastel Dreams": {
+        "bg": "#FFF9FC", "text": "#594657", "surface": "#FFFFFF",
+        "accents": ["#F8DDEB", "#DDEBFA", "#DDF3E4", "#FFF0D4"],
+        "button_text": "#594657",
+    },
+    "Sage & Olive": {
+        "bg": "#F7F8F1", "text": "#344438", "surface": "#FFFFFF",
+        "accents": ["#DCE8D5", "#A8B99A", "#788B68", "#F2EBDD"],
+        "button_text": "#FFFFFF",
+    },
+    "Ocean Blues": {
+        "bg": "#F2FAFC", "text": "#244657", "surface": "#FFFFFF",
+        "accents": ["#D9F0F5", "#A8D9E8", "#5DA8C4", "#24566D"],
+        "button_text": "#FFFFFF",
+    },
+    "Lavender Haze": {
+        "bg": "#FAF7FF", "text": "#51436C", "surface": "#FFFFFF",
+        "accents": ["#E9DFFC", "#CDBBF2", "#A18ADD", "#F9F3FF"],
+        "button_text": "#51436C",
+    },
+    "Peach & Coral": {
+        "bg": "#FFF8F4", "text": "#75483F", "surface": "#FFFFFF",
+        "accents": ["#FFE1D6", "#FFBFAE", "#F28E7B", "#FFF0D9"],
+        "button_text": "#75483F",
+    },
+    "Warm Earth": {
+        "bg": "#FAF5ED", "text": "#594633", "surface": "#FFFFFF",
+        "accents": ["#E8D8C3", "#C9A987", "#9B7653", "#F4EBDD"],
+        "button_text": "#FFFFFF",
+    },
+    "Rose & Burgundy": {
+        "bg": "#FFF7F9", "text": "#68384B", "surface": "#FFFFFF",
+        "accents": ["#F7DDE4", "#E6A8B8", "#B85C78", "#71374F"],
+        "button_text": "#FFFFFF",
+    },
+    "Midnight Blue": {
+        "bg": "#172230", "text": "#F0F5FA", "surface": "#28364B",
+        "accents": ["#28364B", "#344D68", "#6689A8", "#B8D5E8"],
+        "button_text": "#F0F5FA",
+    },
+    "Charcoal & Gold": {
+        "bg": "#1C1C1C", "text": "#F5EEDC", "surface": "#282828",
+        "accents": ["#282828", "#48443D", "#C6A765", "#E8DCC0"],
+        "button_text": "#1C1C1C",
+    },
+    "Mint & Teal": {
+        "bg": "#F2FCF8", "text": "#28564C", "surface": "#FFFFFF",
+        "accents": ["#D5F3E9", "#A1DDCC", "#4DAF9A", "#23796D"],
+        "button_text": "#28564C",
+    },
+}
+
+# ---------- Theme selector ----------
+with st.sidebar:
+    st.markdown("# 🏡 Our Family Hub")
+    st.caption("A little more organised, a little less stressed.")
+
+    theme_name = st.selectbox(
+        "🎨 Choose your theme",
+        list(THEMES.keys()),
+        key="family_theme",
+    )
+
+theme = THEMES[theme_name]
+bg = theme["bg"]
+text_color = theme["text"]
+surface = theme["surface"]
+a0, a1, a2, a3 = theme["accents"]
+button_text = theme["button_text"]
+
+# ---------- Dynamic design ----------
+st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
 
-    .stApp {
-        background: #F7F6F0;
-        color: #303D35;
+    .stApp {{
+        background: {bg} !important;
+        color: {text_color} !important;
         font-family: 'DM Sans', sans-serif;
-    }
-    [data-testid="stSidebar"] {
-        background: #E8EEE5;
-        border-right: 1px solid #DCE4D8;
-    }
-    [data-testid="stSidebar"] h1 {
-        font-family: 'Playfair Display', serif;
-        color: #355342;
-    }
-    h1, h2, h3 {
-        color: #355342 !important;
+    }}
+
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"] {{
+        background: {bg} !important;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background: {surface} !important;
+        border-right: 1px solid {a1} !important;
+    }}
+
+    [data-testid="stSidebar"] * {{
+        color: {text_color};
+    }}
+
+    h1, h2, h3 {{
+        color: {text_color} !important;
         font-family: 'Playfair Display', Georgia, serif !important;
-    }
-    h1 { font-size: 2.6rem !important; }
-    .eyebrow {
-        color: #718573;
+    }}
+
+    h1 {{ font-size: 2.6rem !important; }}
+
+    p, label, [data-testid="stMarkdownContainer"] {{
+        color: {text_color};
+    }}
+
+    .eyebrow {{
+        color: {text_color};
         text-transform: uppercase;
         letter-spacing: 2px;
         font-size: 0.75rem;
         font-weight: 700;
-    }
-    .hero {
-        background: linear-gradient(120deg, #E2EBDE, #F0EDE1);
+    }}
+
+    .hero {{
+        background: linear-gradient(120deg, {a0}, {a3});
         padding: 30px 32px;
         border-radius: 22px;
-        border: 1px solid #DCE5D8;
+        border: 1px solid {a1};
         margin: 12px 0 24px 0;
-    }
-    .hero h1 { margin: 8px 0 4px 0; }
-    .hero p { color: #607363; font-size: 1.05rem; margin-bottom: 0; }
-    .metric-card {
-        background: #FFFFFF;
-        border: 1px solid #E8E8DE;
+    }}
+
+    .hero h1, .hero p, .hero .eyebrow {{
+        color: {text_color} !important;
+    }}
+
+    .hero h1 {{ margin: 8px 0 4px 0; }}
+    .hero p {{ font-size: 1.05rem; margin-bottom: 0; }}
+
+    .metric-card {{
+        background: {surface};
+        border: 1px solid {a1};
         border-radius: 18px;
         padding: 20px;
         min-height: 115px;
-    }
-    .metric-label { color: #788579; font-size: 0.9rem; }
-    .metric-value {
-        color: #355342;
+    }}
+
+    .metric-label, .small-note {{
+        color: {text_color};
+        font-size: 0.9rem;
+    }}
+
+    .metric-value {{
+        color: {text_color};
         font-family: 'Playfair Display', Georgia, serif;
         font-size: 2rem;
         font-weight: 600;
         margin-top: 6px;
-    }
-    div.stButton > button {
-        background: #476B53;
-        color: white;
-        border: 0;
+    }}
+
+    div.stButton > button,
+    div[data-testid="stFormSubmitButton"] button {{
+        background: {a2} !important;
+        color: {button_text} !important;
+        border: 1px solid {a1} !important;
         border-radius: 11px;
         padding: 0.55rem 1rem;
         font-weight: 600;
-    }
-    div.stButton > button:hover {
-        background: #355342;
-        color: white;
-        border: 0;
-    }
-    div[data-testid="stForm"] {
-        background: #FFFFFF;
-        border: 1px solid #E8E8DE;
+    }}
+
+    div.stButton > button:hover,
+    div[data-testid="stFormSubmitButton"] button:hover {{
+        filter: brightness(0.94);
+    }}
+
+    div[data-testid="stForm"] {{
+        background: {surface};
+        border: 1px solid {a1};
         border-radius: 16px;
         padding: 18px;
-    }
-    input, textarea {
+    }}
+
+    input, textarea,
+    [data-baseweb="input"],
+    [data-baseweb="select"] {{
         border-radius: 10px !important;
-    }
-    hr { border-color: #E2E5DB; }
-    .small-note { color: #7B887D; font-size: 0.85rem; }
+    }}
+
+    [data-testid="stCheckbox"] label,
+    [data-testid="stCheckbox"] p {{
+        color: {text_color} !important;
+    }}
+
+    [data-testid="stAlert"] {{
+        background: {a0};
+        color: {text_color};
+    }}
+
+    hr {{
+        border-color: {a1} !important;
+    }}
+
+    .small-note {{ font-size: 0.85rem; }}
 </style>
 """, unsafe_allow_html=True)
+
+
+
+       
+      
 
 # ---------- Temporary app data ----------
 # These lists last while this app session is running.
@@ -100,8 +223,6 @@ if "appointments" not in st.session_state:
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    st.markdown("# 🏡 Our Family Hub")
-    st.caption("A little more organised, a little less stressed.")
     st.divider()
 
     page = st.radio(
@@ -286,105 +407,3 @@ st.markdown(
     'Made with care · Our Family Hub 🏡</p>',
     unsafe_allow_html=True,
 )
-
-# ---------- Dark theme override ----------
-st.markdown("""
-<style>
-    .stApp {
-        background: #151A18 !important;
-        color: #F3F5F1 !important;
-    }
-
-    [data-testid="stSidebar"] {
-        background: #202824 !important;
-        border-right: 1px solid #39463D !important;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: #F0F4EE !important;
-    }
-
-    h1, h2, h3, h4, p, label,
-    [data-testid="stMarkdownContainer"],
-    [data-testid="stMarkdownContainer"] p {
-        color: #F0F4EE;
-    }
-
-    .hero {
-        background: linear-gradient(120deg, #263B30, #30362D) !important;
-        border: 1px solid #435849 !important;
-    }
-
-    .hero h1, .hero p, .hero .eyebrow {
-        color: #F3F5F1 !important;
-    }
-
-    .metric-card {
-        background: #222B26 !important;
-        border: 1px solid #39483E !important;
-    }
-
-    .metric-label, .metric-value, .small-note {
-        color: #E4EDE3 !important;
-    }
-
-    input, textarea,
-    [data-baseweb="input"],
-    [data-baseweb="select"] {
-        background-color: #28312C !important;
-        color: #FFFFFF !important;
-        border-color: #536658 !important;
-    }
-
-    input, textarea {
-        -webkit-text-fill-color: #FFFFFF !important;
-    }
-
-    input::placeholder, textarea::placeholder {
-        color: #C2CEC4 !important;
-        -webkit-text-fill-color: #C2CEC4 !important;
-    }
-
-    [data-testid="stForm"] {
-        background: #202824 !important;
-        border: 1px solid #39483E !important;
-    }
-
-    [data-testid="stCheckbox"] label,
-    [data-testid="stCheckbox"] p {
-        color: #F0F4EE !important;
-    }
-
-    div.stButton > button,
-    div[data-testid="stFormSubmitButton"] button {
-        background: #719879 !important;
-        color: #101B13 !important;
-        border: none !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-    }
-
-    div.stButton > button:hover,
-    div[data-testid="stFormSubmitButton"] button:hover {
-        background: #91B99A !important;
-        color: #101B13 !important;
-    }
-
-    [data-testid="stAlert"] {
-        background: #25342B !important;
-        color: #F0F4EE !important;
-    }
-
-    hr {
-        border-color: #39483E !important;
-    }
-
-    [data-testid="stHeader"] {
-        background: #151A18 !important;
-    }
-
-    [data-testid="stAppViewContainer"] {
-        background: #151A18 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
