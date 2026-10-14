@@ -1,6 +1,9 @@
+
 import streamlit as st
 from datetime import date
+from supabase import create_client
 
+# ---------- Page setup ----------
 st.set_page_config(
     page_title="Our Family Hub",
     page_icon="🏡",
@@ -8,6 +11,54 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ---------- Supabase connection ----------
+try:
+    if "supabase_client" not in st.session_state:
+        st.session_state.supabase_client = create_client(
+            st.secrets["SUPABASE_URL"],
+            st.secrets["SUPABASE_KEY"],
+        )
+    supabase = st.session_state.supabase_client
+except Exception:
+    st.error(
+        "Unable to connect to Supabase. Please check "
+        "SUPABASE_URL and SUPABASE_KEY in Streamlit Secrets."
+    )
+    st.stop()
+
+# ---------- Login ----------
+if "family_user" not in st.session_state:
+    st.markdown("# 🏡 Our Family Hub")
+    st.subheader("Welcome back 💛")
+    st.write("Sign in to access your family's private space.")
+
+    with st.form("family_login_form"):
+        email = st.text_input("Email address")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(
+            "Sign in",
+            use_container_width=True,
+        )
+
+    if submitted:
+        try:
+            response = supabase.auth.sign_in_with_password({
+                "email": email.strip(),
+                "password": password,
+            })
+            if response.user:
+                st.session_state.family_user = response.user
+                st.rerun()
+            else:
+                st.error("Sign-in failed. Please check your details.")
+        except Exception:
+            st.error(
+                "Sign-in failed. Check your email and password. "
+                "If your account requires email confirmation, "
+                "confirm your email first."
+            )
+
+    st.stop()
 
 # ---------- Theme palettes ----------
 THEMES = {
@@ -63,7 +114,7 @@ THEMES = {
     },
 }
 
-# ---------- Theme selector ----------
+# ---------- Sidebar and theme selector ----------
 with st.sidebar:
     st.markdown("# 🏡 Our Family Hub")
     st.caption("A little more organised, a little less stressed.")
@@ -207,13 +258,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-
-
-       
-      
-
-# ---------- Temporary app data ----------
-# These lists last while this app session is running.
+# ---------- Temporary data ----------
+# Tasks, groceries, and appointments are currently session-only.
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 if "groceries" not in st.session_state:
@@ -221,15 +267,31 @@ if "groceries" not in st.session_state:
 if "appointments" not in st.session_state:
     st.session_state.appointments = []
 
-# ---------- Sidebar ----------
+# ---------- Main navigation ----------
 with st.sidebar:
     st.divider()
+    st.caption(f"Signed in as {st.session_state.family_user.email}")
+
+    if st.button("Sign out", use_container_width=True):
+        try:
+            supabase.auth.sign_out()
+        except Exception:
+            pass
+        st.session_state.pop("family_user", None)
+        st.rerun()
 
     page = st.radio(
         "YOUR FAMILY SPACE",
-        ["✨ Home", "✅ To-do list", "🛒 Groceries", "📅 Appointments"],
+        [
+            "✨ Home",
+            "✅ To-do list",
+            "🛒 Groceries",
+            "📅 Appointments",
+            "💌 Family Notes & Messages",
+        ],
         label_visibility="visible",
     )
+
     st.divider()
     st.markdown("**Made for your family**")
     st.caption("One place for the little things that keep life moving.")
@@ -249,6 +311,7 @@ if page == "✨ Home":
     appointment_count = len(st.session_state.appointments)
 
     c1, c2, c3 = st.columns(3)
+
     with c1:
         st.markdown(f"""
         <div class="metric-card">
@@ -256,6 +319,7 @@ if page == "✨ Home":
             <div class="metric-value">{pending}</div>
             <div class="small-note">On your list</div>
         </div>""", unsafe_allow_html=True)
+
     with c2:
         st.markdown(f"""
         <div class="metric-card">
@@ -263,6 +327,7 @@ if page == "✨ Home":
             <div class="metric-value">{grocery_count}</div>
             <div class="small-note">Items to remember</div>
         </div>""", unsafe_allow_html=True)
+
     with c3:
         st.markdown(f"""
         <div class="metric-card">
@@ -276,9 +341,16 @@ if page == "✨ Home":
 
     with left:
         st.markdown("### 🌿 Today's to-dos")
+
         with st.form("home_task_form", clear_on_submit=True):
-            task = st.text_input("What needs doing?", placeholder="e.g. Pick up a prescription")
-            submitted = st.form_submit_button("＋ Add a task", use_container_width=True)
+            task = st.text_input(
+                "What needs doing?",
+                placeholder="e.g. Pick up a prescription",
+            )
+            submitted = st.form_submit_button(
+                "＋ Add a task",
+                use_container_width=True,
+            )
             if submitted and task.strip():
                 st.session_state.tasks.append(task.strip())
                 st.rerun()
@@ -291,9 +363,16 @@ if page == "✨ Home":
 
     with right:
         st.markdown("### 🥑 Grocery notes")
+
         with st.form("home_grocery_form", clear_on_submit=True):
-            grocery = st.text_input("What are we running out of?", placeholder="e.g. Milk, bananas")
-            submitted = st.form_submit_button("＋ Add groceries", use_container_width=True)
+            grocery = st.text_input(
+                "What are we running out of?",
+                placeholder="e.g. Milk, bananas",
+            )
+            submitted = st.form_submit_button(
+                "＋ Add groceries",
+                use_container_width=True,
+            )
             if submitted and grocery.strip():
                 st.session_state.groceries.append(grocery.strip())
                 st.rerun()
@@ -305,26 +384,45 @@ if page == "✨ Home":
             st.info("Your shopping list is waiting for its first item.")
 
     st.markdown("### 📅 Coming up")
+
     if st.session_state.appointments:
-        for item in sorted(st.session_state.appointments, key=lambda x: x["date"]):
-            st.markdown(f"**{item['name']}** · {item['date'].strftime('%d %b %Y')}")
+        for item in sorted(
+            st.session_state.appointments,
+            key=lambda x: x["date"],
+        ):
+            st.markdown(
+                f"**{item['name']}** · "
+                f"{item['date'].strftime('%d %b %Y')}"
+            )
     else:
-        st.caption("No appointments added yet. You can add one in Appointments.")
+        st.caption(
+            "No appointments added yet. You can add one in Appointments."
+        )
 
 # ---------- To-do list ----------
 elif page == "✅ To-do list":
-    st.markdown('<div class="eyebrow">THE FAMILY CHECKLIST</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="eyebrow">THE FAMILY CHECKLIST</div>',
+        unsafe_allow_html=True,
+    )
     st.title("One thing at a time. 🌱")
     st.write("Get it out of your head and onto the list.")
 
     with st.form("task_form", clear_on_submit=True):
-        task = st.text_input("New task", placeholder="e.g. Book the dentist")
-        submitted = st.form_submit_button("＋ Add task", use_container_width=True)
+        task = st.text_input(
+            "New task",
+            placeholder="e.g. Book the dentist",
+        )
+        submitted = st.form_submit_button(
+            "＋ Add task",
+            use_container_width=True,
+        )
         if submitted and task.strip():
             st.session_state.tasks.append(task.strip())
             st.rerun()
 
     st.write("")
+
     if st.session_state.tasks:
         for i, item in enumerate(st.session_state.tasks):
             c1, c2 = st.columns([5, 1])
@@ -334,6 +432,7 @@ elif page == "✅ To-do list":
                 if st.button("Remove", key=f"remove_task_{i}"):
                     st.session_state.tasks.pop(i)
                     st.rerun()
+
         if st.button("Clear all tasks"):
             st.session_state.tasks = []
             st.rerun()
@@ -342,19 +441,29 @@ elif page == "✅ To-do list":
 
 # ---------- Groceries ----------
 elif page == "🛒 Groceries":
-    st.markdown('<div class="eyebrow">THE SHOPPING LIST</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="eyebrow">THE SHOPPING LIST</div>',
+        unsafe_allow_html=True,
+    )
     st.title("A little list, a smoother shop. 🥑")
     st.write("Add what you need as soon as you think of it.")
 
     with st.form("grocery_form", clear_on_submit=True):
-        grocery = st.text_input("Grocery item", placeholder="e.g. Oats")
-        submitted = st.form_submit_button("＋ Add item", use_container_width=True)
+        grocery = st.text_input(
+            "Grocery item",
+            placeholder="e.g. Oats",
+        )
+        submitted = st.form_submit_button(
+            "＋ Add item",
+            use_container_width=True,
+        )
         if submitted and grocery.strip():
             st.session_state.groceries.append(grocery.strip())
             st.rerun()
 
     if st.session_state.groceries:
         st.markdown("### Your list")
+
         for i, item in enumerate(st.session_state.groceries):
             c1, c2 = st.columns([5, 1])
             with c1:
@@ -363,6 +472,7 @@ elif page == "🛒 Groceries":
                 if st.button("Remove", key=f"remove_grocery_{i}"):
                     st.session_state.groceries.pop(i)
                     st.rerun()
+
         if st.button("Clear shopping list"):
             st.session_state.groceries = []
             st.rerun()
@@ -371,14 +481,24 @@ elif page == "🛒 Groceries":
 
 # ---------- Appointments ----------
 elif page == "📅 Appointments":
-    st.markdown('<div class="eyebrow">FAMILY CALENDAR</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="eyebrow">FAMILY CALENDAR</div>',
+        unsafe_allow_html=True,
+    )
     st.title("The important dates. 🌷")
     st.write("Keep appointments and family plans in one place.")
 
     with st.form("appointment_form", clear_on_submit=True):
-        name = st.text_input("Appointment or event", placeholder="e.g. Dr. Patel — annual check-up")
+        name = st.text_input(
+            "Appointment or event",
+            placeholder="e.g. Dentist appointment",
+        )
         appointment_date = st.date_input("Date", value=date.today())
-        submitted = st.form_submit_button("＋ Save appointment", use_container_width=True)
+        submitted = st.form_submit_button(
+            "＋ Save appointment",
+            use_container_width=True,
+        )
+
         if submitted and name.strip():
             st.session_state.appointments.append({
                 "name": name.strip(),
@@ -387,20 +507,116 @@ elif page == "📅 Appointments":
             st.rerun()
 
     st.markdown("### Your appointments")
+
     if st.session_state.appointments:
-        for i, item in enumerate(sorted(st.session_state.appointments, key=lambda x: x["date"])):
+        sorted_appointments = sorted(
+            st.session_state.appointments,
+            key=lambda x: x["date"],
+        )
+
+        for i, item in enumerate(sorted_appointments):
             c1, c2 = st.columns([5, 1])
+
             with c1:
                 st.markdown(f"**{item['name']}**")
                 st.caption(item["date"].strftime("%A, %d %B %Y"))
+
             with c2:
-                if st.button("Remove", key=f"remove_appointment_{i}_{item['name']}"):
+                if st.button(
+                    "Remove",
+                    key=f"remove_appointment_{i}_{item['name']}",
+                ):
                     st.session_state.appointments.remove(item)
                     st.rerun()
+
             st.divider()
     else:
         st.info("No appointments yet. Add one above to get started.")
 
+# ---------- Shared Family Notes & Messages ----------
+elif page == "💌 Family Notes & Messages":
+    st.markdown(
+        '<div class="eyebrow">YOUR LITTLE FAMILY NOTICEBOARD</div>',
+        unsafe_allow_html=True,
+    )
+    st.title("Notes from the heart. 💌")
+    st.write(
+        "Leave a note, share a reminder, or send each other a message."
+    )
+
+    with st.form("family_message_form", clear_on_submit=True):
+        message_type = st.selectbox(
+            "What would you like to leave?",
+            ["Note", "Message"],
+        )
+        title = st.text_input(
+            "Title",
+            placeholder="e.g. Weekend plans",
+        )
+        body = st.text_area(
+            "Your note or message",
+            placeholder="Write something for your family...",
+        )
+
+        submitted = st.form_submit_button(
+            "＋ Save to our family space",
+            use_container_width=True,
+        )
+
+        if submitted:
+            if not title.strip() or not body.strip():
+                st.warning("Please enter both a title and a message.")
+            else:
+                try:
+                    supabase.table("family_messages").insert({
+                        "author": st.session_state.family_user.email,
+                        "message_type": message_type,
+                        "title": title.strip(),
+                        "body": body.strip(),
+                    }).execute()
+
+                    st.success("Your note has been saved! 💛")
+                    st.rerun()
+
+                except Exception:
+                    st.error(
+                        "We couldn't save your note. Please check your "
+                        "Supabase connection and database permissions."
+                    )
+
+    st.divider()
+    st.subheader("Our family noticeboard")
+
+    try:
+        result = (
+            supabase.table("family_messages")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        messages = result.data or []
+
+        if not messages:
+            st.info("No notes yet. Leave the first one!")
+        else:
+            for message in messages:
+                with st.container(border=True):
+                    st.caption(
+                        f"{message['message_type']} · "
+                        f"From {message['author']} · "
+                        f"{message['created_at'][:16].replace('T', ' ')}"
+                    )
+                    st.markdown(f"**{message['title']}**")
+                    st.write(message["body"])
+
+    except Exception:
+        st.error(
+            "We couldn't load your family notes. Please check your "
+            "Supabase connection and database permissions."
+        )
+
+# ---------- Footer ----------
 st.divider()
 st.markdown(
     '<p style="text-align:center;color:#849083;font-size:0.8rem;">'
