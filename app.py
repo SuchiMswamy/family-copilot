@@ -1,4 +1,3 @@
-
 import streamlit as st
 from datetime import date
 from supabase import create_client
@@ -8,7 +7,7 @@ st.set_page_config(
     page_title="Our Family Hub",
     page_icon="🏡",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ---------- Supabase connection ----------
@@ -80,7 +79,7 @@ THEMES = {
     },
 }
 
-# ---------- Sidebar and theme selector ----------
+# ---------- Theme selector ----------
 with st.sidebar:
     st.markdown("# 🏡 Our Family Hub")
     st.caption("A little more organised, a little less stressed.")
@@ -98,7 +97,7 @@ surface = theme["surface"]
 a0, a1, a2, a3 = theme["accents"]
 button_text = theme["button_text"]
 
-# ---------- Dynamic design ----------
+# ---------- Design and mobile styling ----------
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
@@ -184,8 +183,10 @@ st.markdown(f"""
         color: {button_text} !important;
         border: 1px solid {a1} !important;
         border-radius: 11px;
-        padding: 0.55rem 1rem;
+        padding: 0.65rem 1rem;
+        min-height: 44px;
         font-weight: 600;
+        width: 100%;
     }}
 
     div.stButton > button:hover,
@@ -221,11 +222,82 @@ st.markdown(f"""
     }}
 
     .small-note {{ font-size: 0.85rem; }}
+
+    /* Navigation dropdown */
+    div[data-testid="stSelectbox"] {{
+        margin-bottom: 0.8rem;
+    }}
+
+    /* Mobile layout */
+    @media (max-width: 768px) {{
+        .block-container {{
+            padding: 0.8rem 0.8rem 2rem 0.8rem !important;
+        }}
+
+        h1 {{
+            font-size: 1.8rem !important;
+            line-height: 1.25 !important;
+        }}
+
+        h2 {{ font-size: 1.5rem !important; }}
+        h3 {{ font-size: 1.2rem !important; }}
+
+        .hero {{
+            padding: 20px 16px;
+            border-radius: 16px;
+            margin-top: 8px;
+        }}
+
+        .hero p {{
+            font-size: 0.95rem;
+        }}
+
+        .metric-card {{
+            padding: 14px;
+            min-height: auto;
+            margin-bottom: 8px;
+        }}
+
+        .metric-value {{
+            font-size: 1.7rem;
+        }}
+
+        div[data-testid="stForm"] {{
+            padding: 12px;
+        }}
+
+        div.stButton > button,
+        div[data-testid="stFormSubmitButton"] button {{
+            min-height: 46px;
+            white-space: normal;
+        }}
+
+        /* Stack dashboard columns on narrow screens */
+        [data-testid="stHorizontalBlock"] {{
+            flex-wrap: wrap !important;
+            gap: 0.75rem !important;
+        }}
+
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {{
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+        }}
+
+        /* Keep the navigation control easy to tap */
+        div[data-testid="stSelectbox"] [role="combobox"] {{
+            min-height: 46px;
+            font-size: 16px !important;
+        }}
+
+        input, textarea {{
+            font-size: 16px !important;
+        }}
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------- Temporary data ----------
-# Tasks, groceries, and appointments are currently session-only.
+# Tasks, groceries, and appointments are session-only for now.
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 if "groceries" not in st.session_state:
@@ -233,25 +305,30 @@ if "groceries" not in st.session_state:
 if "appointments" not in st.session_state:
     st.session_state.appointments = []
 
-# ---------- Main navigation ----------
-with st.sidebar:
-    st.divider()
+# ---------- Mobile-friendly main navigation ----------
+st.markdown("## 🏡 Our Family Hub")
+st.caption("A little more organised, a little less stressed.")
 
-    page = st.radio(
-        "YOUR FAMILY SPACE",
-        [
-            "✨ Home",
-            "✅ To-do list",
-            "🛒 Groceries",
-            "📅 Appointments",
-            "💌 Family Notes & Messages",
-        ],
-        label_visibility="visible",
-    )
+pages = [
+    "✨ Home",
+    "✅ To-do list",
+    "🛒 Groceries",
+    "📅 Appointments",
+    "💌 Family Notes & Messages",
+]
 
-    st.divider()
-    st.markdown("**Made for your family**")
-    st.caption("One place for the little things that keep life moving.")
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "✨ Home"
+
+# This dropdown is on the main screen, not hidden in the sidebar.
+page = st.selectbox(
+    "📍 Where would you like to go?",
+    pages,
+    key="main_page_navigation",
+    label_visibility="visible",
+)
+
+st.divider()
 
 # ---------- Home ----------
 if page == "✨ Home":
@@ -378,17 +455,13 @@ elif page == "✅ To-do list":
             st.session_state.tasks.append(task.strip())
             st.rerun()
 
-    st.write("")
-
     if st.session_state.tasks:
         for i, item in enumerate(st.session_state.tasks):
-            c1, c2 = st.columns([5, 1])
-            with c1:
-                st.checkbox(item, key=f"todo_page_{i}")
-            with c2:
-                if st.button("Remove", key=f"remove_task_{i}"):
-                    st.session_state.tasks.pop(i)
-                    st.rerun()
+            st.checkbox(item, key=f"todo_page_{i}")
+
+            if st.button("Remove", key=f"remove_task_{i}"):
+                st.session_state.tasks.pop(i)
+                st.rerun()
 
         if st.button("Clear all tasks"):
             st.session_state.tasks = []
@@ -422,13 +495,11 @@ elif page == "🛒 Groceries":
         st.markdown("### Your list")
 
         for i, item in enumerate(st.session_state.groceries):
-            c1, c2 = st.columns([5, 1])
-            with c1:
-                st.checkbox(item, key=f"grocery_page_{i}")
-            with c2:
-                if st.button("Remove", key=f"remove_grocery_{i}"):
-                    st.session_state.groceries.pop(i)
-                    st.rerun()
+            st.checkbox(item, key=f"grocery_page_{i}")
+
+            if st.button("Remove", key=f"remove_grocery_{i}"):
+                st.session_state.groceries.pop(i)
+                st.rerun()
 
         if st.button("Clear shopping list"):
             st.session_state.groceries = []
@@ -472,19 +543,15 @@ elif page == "📅 Appointments":
         )
 
         for i, item in enumerate(sorted_appointments):
-            c1, c2 = st.columns([5, 1])
+            st.markdown(f"**{item['name']}**")
+            st.caption(item["date"].strftime("%A, %d %B %Y"))
 
-            with c1:
-                st.markdown(f"**{item['name']}**")
-                st.caption(item["date"].strftime("%A, %d %B %Y"))
-
-            with c2:
-                if st.button(
-                    "Remove",
-                    key=f"remove_appointment_{i}_{item['name']}",
-                ):
-                    st.session_state.appointments.remove(item)
-                    st.rerun()
+            if st.button(
+                "Remove appointment",
+                key=f"remove_appointment_{i}_{item['name']}",
+            ):
+                st.session_state.appointments.remove(item)
+                st.rerun()
 
             st.divider()
     else:
