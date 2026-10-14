@@ -26,40 +26,6 @@ except Exception:
     )
     st.stop()
 
-# ---------- Login ----------
-if "family_user" not in st.session_state:
-    st.markdown("# 🏡 Our Family Hub")
-    st.subheader("Welcome back 💛")
-    st.write("Sign in to access your family's private space.")
-
-    with st.form("family_login_form"):
-        email = st.text_input("Email address")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button(
-            "Sign in",
-            use_container_width=True,
-        )
-
-    if submitted:
-        try:
-            response = supabase.auth.sign_in_with_password({
-                "email": email.strip(),
-                "password": password,
-            })
-            if response.user:
-                st.session_state.family_user = response.user
-                st.rerun()
-            else:
-                st.error("Sign-in failed. Please check your details.")
-        except Exception:
-            st.error(
-                "Sign-in failed. Check your email and password. "
-                "If your account requires email confirmation, "
-                "confirm your email first."
-            )
-
-    st.stop()
-
 # ---------- Theme palettes ----------
 THEMES = {
     "Pastel Dreams": {
@@ -270,15 +236,6 @@ if "appointments" not in st.session_state:
 # ---------- Main navigation ----------
 with st.sidebar:
     st.divider()
-    st.caption(f"Signed in as {st.session_state.family_user.email}")
-
-    if st.button("Sign out", use_container_width=True):
-        try:
-            supabase.auth.sign_out()
-        except Exception:
-            pass
-        st.session_state.pop("family_user", None)
-        st.rerun()
 
     page = st.radio(
         "YOUR FAMILY SPACE",
@@ -544,77 +501,11 @@ elif page == "💌 Family Notes & Messages":
         "Leave a note, share a reminder, or send each other a message."
     )
 
-    with st.form("family_message_form", clear_on_submit=True):
-        message_type = st.selectbox(
-            "What would you like to leave?",
-            ["Note", "Message"],
-        )
-        title = st.text_input(
-            "Title",
-            placeholder="e.g. Weekend plans",
-        )
-        body = st.text_area(
-            "Your note or message",
-            placeholder="Write something for your family...",
-        )
-
-        submitted = st.form_submit_button(
-            "＋ Save to our family space",
-            use_container_width=True,
-        )
-
-        if submitted:
-            if not title.strip() or not body.strip():
-                st.warning("Please enter both a title and a message.")
-            else:
-                try:
-                    supabase.table("family_messages").insert({
-                        "author": st.session_state.family_user.email,
-                        "message_type": message_type,
-                        "title": title.strip(),
-                        "body": body.strip(),
-                    }).execute()
-
-                    st.success("Your note has been saved! 💛")
-                    st.rerun()
-
-                except Exception:
-                    st.error(
-                        "We couldn't save your note. Please check your "
-                        "Supabase connection and database permissions."
-                    )
-
-    st.divider()
-    st.subheader("Our family noticeboard")
-
-    try:
-        result = (
-            supabase.table("family_messages")
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
-        )
-
-        messages = result.data or []
-
-        if not messages:
-            st.info("No notes yet. Leave the first one!")
-        else:
-            for message in messages:
-                with st.container(border=True):
-                    st.caption(
-                        f"{message['message_type']} · "
-                        f"From {message['author']} · "
-                        f"{message['created_at'][:16].replace('T', ' ')}"
-                    )
-                    st.markdown(f"**{message['title']}**")
-                    st.write(message["body"])
-
-    except Exception:
-        st.error(
-            "We couldn't load your family notes. Please check your "
-            "Supabase connection and database permissions."
-        )
+    st.info(
+        "Family Notes & Messages is temporarily unavailable while sign-in "
+        "is disabled. Your existing notes remain protected in Supabase. "
+        "Restore authentication to read or save private family messages."
+    )
 
 # ---------- Footer ----------
 st.divider()
