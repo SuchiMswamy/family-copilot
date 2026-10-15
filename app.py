@@ -194,7 +194,7 @@ if page=="Home":
         label,value,detail,icon,target=args
         with c:
             # The full summary card is one large button, so the whole surface is tappable.
-            card_label=f"{label} {icon}\n\n{value}\n{detail}\n\nTap to open →"
+            card_label=f"{label} {icon}\n\n{value}\n{detail}"
             if st.button(card_label,key=f"home_metric_{i}",use_container_width=True): go(target)
     greet="Good morning" if now.hour<12 else ("Good afternoon" if now.hour<18 else "Good evening")
     st.markdown(f"### {greet}, Suchi & Abi 💙")
