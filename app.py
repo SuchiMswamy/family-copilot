@@ -10,7 +10,7 @@ DATA_DIR = Path(os.environ.get("FAMILY_HUB_DATA_DIR", ".")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "family_hub.sqlite3"
 COLLECTIONS = ["tasks", "routines", "groceries", "events", "notes", "memories", "transactions", "activity", "pantry"]
-DARK = {"bg":"#111318","sidebar":"#171a21","card":"#1c2029","card2":"#242b37","text":"#f4f6fa","muted":"#b6bfce","border":"#343c4a","accent":"#a9c8f0","accent_bg":"#29384c","input":"#171b23","good":"#8ed7b1","warn":"#f0ca86"}
+DARK = {"bg":"#0d1117","sidebar":"#111720","card":"#151d28","card2":"#202b3a","text":"#f5f7fb","muted":"#aeb9c9","border":"#2b394b","accent":"#b8d5ff","accent_bg":"#24364d","input":"#111925","good":"#91e0ba","warn":"#f4ce8d"}
 
 def stamp(): return datetime.now().isoformat(timespec="seconds")
 def new_id(): return uuid.uuid4().hex
@@ -82,34 +82,41 @@ st.markdown(f"""
 :root{{--bg:{DARK['bg']};--side:{DARK['sidebar']};--card:{DARK['card']};--card2:{DARK['card2']};--text:{DARK['text']};--muted:{DARK['muted']};--border:{DARK['border']};--accent:{DARK['accent']};--accentbg:{DARK['accent_bg']};--input:{DARK['input']};--good:{DARK['good']};--warn:{DARK['warn']};}}
 /* Helvetica-first typography throughout; mobile-friendly sizing */
 html,body,[class*="css"],button,input,textarea,select{{font-family:Helvetica,Arial,sans-serif!important}}
-.stApp{{background:var(--bg);color:var(--text);font-size:17px}}
+html{{scroll-behavior:smooth}}
+.stApp{{background:radial-gradient(ellipse at 12% 0%,rgba(77,111,155,.13),transparent 34%),var(--bg);color:var(--text);font-size:17px}}
+::selection{{background:rgba(184,213,255,.28);color:var(--text)}}
+*:focus-visible{{outline:2px solid var(--accent)!important;outline-offset:3px!important}}
 [data-testid="stHeader"]{{background:transparent}}
 [data-testid="stMainBlockContainer"]{{max-width:1500px;padding:1.2rem 1.25rem 3rem}}
-section[data-testid="stSidebar"]{{background:var(--side);border-right:1px solid var(--border)}}
+section[data-testid="stSidebar"]{{background:linear-gradient(180deg,#131b27,var(--side) 55%);border-right:1px solid var(--border)}}
 section[data-testid="stSidebar"]>div{{padding:1.3rem .85rem}}
 .stApp p,.stApp label,.stApp li,.stApp h1,.stApp h2,.stApp h3,.stApp h4,.stApp [data-testid="stMarkdownContainer"],section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:var(--text)}}
 h1,h2,h3,.brand,.hero-title,.section-title{{font-family:Helvetica,Arial,sans-serif!important;letter-spacing:-.02em;font-weight:700}}
 .stApp p,.stApp li,.stApp label,.stApp [data-testid="stMarkdownContainer"]{{font-size:1rem;line-height:1.6}}
-.brand{{font-size:1.55rem;font-weight:750}} .muted,.stApp [data-testid="stCaptionContainer"] p{{color:var(--muted)!important;font-size:.95rem}}
-.hero{{background:linear-gradient(135deg,var(--card),#202a39);border:1px solid var(--border);border-radius:24px;padding:clamp(22px,4vw,38px);margin-bottom:1.2rem;animation:rise-in .45s ease-out both}}
+.brand{{font-size:1.55rem;font-weight:750;letter-spacing:-.04em}} .muted,.stApp [data-testid="stCaptionContainer"] p{{color:var(--muted)!important;font-size:.95rem}}
+.hero{{position:relative;overflow:hidden;background:linear-gradient(125deg,#182332 0%,#1c2b3e 52%,#202d3b 100%);border:1px solid #35465c;border-radius:26px;padding:clamp(24px,4vw,42px);margin-bottom:1.35rem;box-shadow:0 18px 48px rgba(0,0,0,.18);animation:rise-in .45s ease-out both}}
+.hero:after{{content:"♡";position:absolute;right:4%;top:-45px;font-size:clamp(110px,19vw,230px);line-height:1;color:rgba(184,213,255,.055);pointer-events:none}}
 .hero-kicker{{color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;font-weight:700;margin-bottom:.8rem}}
 .hero-title{{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;color:var(--text)}} .hero-copy{{color:var(--muted);font-size:1.08rem;line-height:1.7;max-width:720px;margin-top:.7rem}}
-.section-title{{font-size:1.65rem;margin:1.2rem 0 .2rem;color:var(--text)}} .section-subtitle{{color:var(--muted);font-size:1rem;margin-bottom:1rem;line-height:1.6}}
-.metric{{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:17px;min-height:125px;margin-bottom:.65rem;animation:rise-in .45s ease-out both}}
-.home-metric-button{{width:100%;text-align:left;white-space:pre-line!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;flex-direction:column!important;gap:4px!important;background:var(--card)!important;border:1px solid var(--border)!important;border-radius:17px!important;min-height:160px!important;padding:16px!important;box-shadow:none!important;animation:rise-in .45s ease-out both}}
-.home-metric-button:hover{{background:var(--card2)!important;border-color:var(--accent)!important;transform:translateY(-2px)}}
+.section-title{{font-size:1.65rem;margin:1.45rem 0 .25rem;color:var(--text)}} .section-subtitle{{color:var(--muted);font-size:1rem;margin-bottom:1rem;line-height:1.6}}
+.metric{{background:linear-gradient(145deg,#192332,var(--card));border:1px solid var(--border);border-radius:19px;padding:18px;min-height:125px;margin-bottom:.65rem;box-shadow:0 8px 24px rgba(0,0,0,.12);animation:rise-in .45s ease-out both;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}}
+.metric:hover{{transform:translateY(-2px);border-color:#506783;box-shadow:0 12px 28px rgba(0,0,0,.2)}}
+.home-metric-button{{width:100%;text-align:left;white-space:pre-line!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;flex-direction:column!important;gap:4px!important;background:linear-gradient(145deg,#1b2736,#141c27)!important;border:1px solid #2e3d50!important;border-radius:19px!important;min-height:160px!important;padding:17px!important;box-shadow:0 9px 24px rgba(0,0,0,.14)!important;animation:rise-in .45s ease-out both}}
+.home-metric-button:hover{{background:linear-gradient(145deg,#25364a,#192434)!important;border-color:var(--accent)!important;transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.22)!important}}
+.home-metric-button:active{{transform:scale(.985)}}
 .home-metric-button p{{margin:0!important;line-height:1.35!important;white-space:pre-line!important}}
 .home-metric-button [data-testid="stMarkdownContainer"]{{white-space:pre-line!important}}
 .metric-head{{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-weight:600;font-size:.98rem}} .metric-head span{{background:var(--accentbg);padding:5px 9px;border-radius:9px;color:var(--accent)}}
 .metric-value{{font-size:2rem;font-weight:750;margin-top:8px;overflow-wrap:anywhere}}
-[data-testid="stVerticalBlockBorderWrapper"]{{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important;animation:rise-in .32s ease-out both}}
+[data-testid="stVerticalBlockBorderWrapper"]{{background:linear-gradient(145deg,rgba(25,35,49,.94),rgba(19,26,37,.96))!important;border:1px solid var(--border)!important;border-radius:18px!important;box-shadow:0 7px 22px rgba(0,0,0,.09);animation:rise-in .32s ease-out both}}
 .stApp input,.stApp textarea,.stApp [data-baseweb="input"] input,.stApp [data-baseweb="textarea"] textarea{{background:var(--input)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;caret-color:var(--text)!important;border-color:var(--border)!important;opacity:1!important;font-size:16px!important;min-height:44px}}
 .stApp input::placeholder,.stApp textarea::placeholder{{color:var(--muted)!important;-webkit-text-fill-color:var(--muted)!important;opacity:1!important}}
 .stApp [data-baseweb="select"]>div,.stApp [data-baseweb="select"] *{{background-color:var(--input);color:var(--text)!important;border-color:var(--border)!important;font-size:16px!important}}
 [data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]{{background:var(--card)!important;color:var(--text)!important}}
-.stApp .stButton>button,.stApp .stDownloadButton>button{{background:var(--card2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:12px!important;min-height:48px;padding:.55rem .85rem;font-size:1rem!important;font-weight:650;white-space:normal;transition:transform .16s ease,border-color .16s ease,background .16s ease}}
-.stApp .stButton>button:hover,.stApp .stDownloadButton>button:hover{{border-color:var(--accent)!important;color:var(--accent)!important;transform:translateY(-1px)}}
-.stApp [data-testid="stFormSubmitButton"] button,.stApp button[kind="primary"]{{background:var(--accent)!important;color:#111722!important;border:1px solid var(--accent)!important;border-radius:12px!important;min-height:50px;font-size:1rem!important;font-weight:750}}
+.stApp .stButton>button,.stApp .stDownloadButton>button{{background:linear-gradient(180deg,#253246,#1b2635)!important;color:var(--text)!important;border:1px solid #35455a!important;border-radius:13px!important;min-height:49px;padding:.6rem .9rem;font-size:1rem!important;font-weight:650;white-space:normal;box-shadow:0 3px 8px rgba(0,0,0,.1);transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease}}
+.stApp .stButton>button:hover,.stApp .stDownloadButton>button:hover{{border-color:var(--accent)!important;color:var(--accent)!important;transform:translateY(-1px);box-shadow:0 7px 16px rgba(0,0,0,.18)}}
+.stApp .stButton>button:active,.stApp .stDownloadButton>button:active{{transform:scale(.985)}}
+.stApp [data-testid="stFormSubmitButton"] button,.stApp button[kind="primary"]{{background:linear-gradient(135deg,#c9e0ff,#9ebfe9)!important;color:#101824!important;border:1px solid #c9e0ff!important;border-radius:13px!important;min-height:51px;font-size:1rem!important;font-weight:750;box-shadow:0 5px 16px rgba(130,174,228,.16)}}
 .stApp [data-testid="stFormSubmitButton"] button *,.stApp button[kind="primary"] *{{color:#111722!important;-webkit-text-fill-color:#111722!important}}
 .stApp hr{{border-color:var(--border)}} a{{color:var(--accent)!important}}
 /* Small visual feedback for updates, reminders, and completed work */
@@ -123,12 +130,12 @@ h1,h2,h3,.brand,.hero-title,.section-title{{font-family:Helvetica,Arial,sans-ser
 .stAlert{{border-radius:13px;animation:rise-in .3s ease-out both}}
 @media(max-width:760px){{
  [data-testid="stMainBlockContainer"]{{padding:.65rem .65rem 1.6rem}}
- .hero{{border-radius:17px;padding:19px 17px;margin-bottom:.9rem}}
+ .hero{{border-radius:19px;padding:21px 17px;margin-bottom:1rem}}
  .hero-title{{font-size:clamp(1.8rem,8vw,2.35rem)}} .hero-copy{{font-size:1rem;line-height:1.65}}
  .hero-kicker{{font-size:.78rem}} .section-title{{font-size:1.45rem}}
  .metric{{padding:12px;min-height:104px;border-radius:14px}}
  .metric-head{{font-size:.9rem}} .metric-value{{font-size:1.55rem}}
- .home-metric-button{{min-height:150px!important;padding:13px!important;border-radius:14px!important}}
+ .home-metric-button{{min-height:142px!important;padding:14px!important;border-radius:16px!important}}
  .stApp p,.stApp li,.stApp label,.stApp [data-testid="stMarkdownContainer"]{{font-size:16px;line-height:1.55}}
  .stApp [data-testid="stCaptionContainer"] p{{font-size:14px!important;line-height:1.45}}
  .stApp .stButton>button,.stApp .stDownloadButton>button{{min-height:50px;font-size:16px!important;padding:.65rem .75rem}}
