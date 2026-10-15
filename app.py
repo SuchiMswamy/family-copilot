@@ -468,6 +468,91 @@ st.markdown(
         color: var(--accent);
     }}
 
+
+    /* Strong overrides for Streamlit/BaseWeb controls in light themes */
+    .stApp [data-testid="stExpander"] details,
+    .stApp [data-testid="stExpander"] summary,
+    .stApp [data-testid="stExpander"] [data-testid="stExpanderToggleIcon"],
+    .stApp [data-testid="stExpander"] details > summary {{
+        background: var(--card) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }}
+
+    .stApp [data-testid="stExpander"] summary *,
+    .stApp [data-testid="stExpander"] summary p,
+    .stApp [data-testid="stExpander"] summary span {{
+        color: var(--text) !important;
+        opacity: 1 !important;
+    }}
+
+    .stApp [data-testid="stExpander"] > details > div,
+    .stApp [data-testid="stExpander"] [data-testid="stExpanderDetails"],
+    .stApp [data-testid="stForm"],
+    .stApp [data-testid="stVerticalBlockBorderWrapper"] {{
+        background-color: var(--card) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }}
+
+    .stApp input,
+    .stApp textarea,
+    .stApp [data-baseweb="input"] input,
+    .stApp [data-baseweb="textarea"] textarea {{
+        background-color: var(--input) !important;
+        color: var(--text) !important;
+        -webkit-text-fill-color: var(--text) !important;
+        caret-color: var(--text) !important;
+        border-color: var(--border) !important;
+        opacity: 1 !important;
+    }}
+
+    .stApp input::placeholder,
+    .stApp textarea::placeholder,
+    .stApp [data-baseweb="input"] input::placeholder,
+    .stApp [data-baseweb="textarea"] textarea::placeholder {{
+        color: var(--muted) !important;
+        -webkit-text-fill-color: var(--muted) !important;
+        opacity: 1 !important;
+    }}
+
+    .stApp [data-baseweb="input"] > div,
+    .stApp [data-baseweb="textarea"] > div {{
+        background-color: var(--input) !important;
+        border-color: var(--border) !important;
+    }}
+
+    .stApp [data-testid="stFormSubmitButton"] button,
+    .stApp [data-testid="stForm"] button[kind="primary"],
+    .stApp button[kind="primary"] {{
+        background: var(--accent) !important;
+        color: #FFFFFF !important;
+        border: 1px solid var(--accent) !important;
+        opacity: 1 !important;
+        box-shadow: none !important;
+    }}
+
+    .stApp [data-testid="stFormSubmitButton"] button *,
+    .stApp button[kind="primary"] * {{
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+    }}
+
+    .stApp .stButton > button,
+    .stApp .stDownloadButton > button {{
+        background: var(--card) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+        opacity: 1 !important;
+    }}
+
+    .stApp label,
+    .stApp [data-testid="stWidgetLabel"] *,
+    .stApp [data-testid="stMarkdownContainer"] p,
+    .stApp [data-testid="stMarkdownContainer"] span {{
+        color: var(--text);
+    }}
+
     /* Readable contrast, resilient cards, and touch-friendly controls */
     .card-heading, .card-description, .metric-value, .metric-detail,
     .hero-title, .hero-copy, .section-title, .section-subtitle,
