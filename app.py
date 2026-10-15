@@ -18,30 +18,6 @@ st.set_page_config(
 # THEMES
 # =========================================================
 THEMES = {
-    "Pastel": {
-        "bg": "#FBF7F5",
-        "sidebar": "#F3EAE8",
-        "card": "#FFFFFF",
-        "text": "#382F35",
-        "muted": "#62545D",
-        "border": "#E8DCD9",
-        "accent": "#81536B",
-        "accent_soft": "#F2E4EA",
-        "input": "#FFFFFF",
-        "shadow": "0 4px 20px rgba(69, 44, 53, 0.045)",
-    },
-    "Light": {
-        "bg": "#F5F7FA",
-        "sidebar": "#FFFFFF",
-        "card": "#FFFFFF",
-        "text": "#202938",
-        "muted": "#536174",
-        "border": "#E1E6ED",
-        "accent": "#315C7A",
-        "accent_soft": "#EAF1F7",
-        "input": "#FFFFFF",
-        "shadow": "0 4px 20px rgba(30, 50, 75, 0.045)",
-    },
     "Dark": {
         "bg": "#15171B",
         "sidebar": "#1C1F24",
@@ -55,12 +31,11 @@ THEMES = {
         "shadow": "0 4px 20px rgba(0, 0, 0, 0.12)",
     },
 }
-
 # =========================================================
 # SESSION STATE
 # =========================================================
 DEFAULTS = {
-    "theme": "Pastel",
+    "theme": "Dark",
     "tasks": [],
     "groceries": [],
     "appointments": [],
@@ -74,7 +49,7 @@ for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-C = THEMES[st.session_state.theme]
+C = THEMES["Dark"]
 
 
 # =========================================================
@@ -100,24 +75,17 @@ def record_history(action, item):
 
 
 def card(title, description="", icon="✨", eyebrow=None):
-    """Premium reusable information card."""
-    eyebrow_html = (
-        f'<div class="eyebrow">{safe(eyebrow)}</div>'
-        if eyebrow else ""
-    )
-    st.markdown(
-        textwrap.dedent(f"""
-        <div class="premium-card">
-            {eyebrow_html}
-            <div class="card-heading">
-                <span class="card-icon">{safe(icon)}</span>
-                <span>{safe(title)}</span>
-            </div>
-            <div class="card-description">{safe(description)}</div>
-        </div>
-        """),
-        unsafe_allow_html=True,
-    )
+    """Reusable information card rendered with native Streamlit elements.
+
+    Using native widgets here avoids HTML being displayed as literal code
+    when Markdown indentation or Streamlit rendering behavior changes.
+    """
+    with st.container(border=True):
+        if eyebrow:
+            st.caption(str(eyebrow).upper())
+        st.markdown(f"### {safe(icon)}  {safe(title)}")
+        if description:
+            st.write(description)
 
 
 def metric_card(label, value, icon, detail):
@@ -469,6 +437,15 @@ st.markdown(
     }}
 
 
+    /* Native Streamlit shortcut cards */
+    [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 18px !important;
+        box-shadow: {C["shadow"]};
+        padding: 0.25rem;
+    }}
+
     /* Strong overrides for Streamlit/BaseWeb controls in light themes */
     .stApp [data-testid="stExpander"] details,
     .stApp [data-testid="stExpander"] summary,
@@ -653,15 +630,7 @@ with st.sidebar:
 
     st.markdown('<div class="sidebar-label">Appearance</div>',
                 unsafe_allow_html=True)
-
-    st.selectbox(
-        "Choose your style",
-        ["Pastel", "Light", "Dark"],
-        key="theme",
-        label_visibility="collapsed",
-    )
-
-    st.caption("Your theme updates automatically.")
+    st.caption("Dark theme · Always on")
 
     st.markdown('<div class="sidebar-label">Your space</div>',
                 unsafe_allow_html=True)
@@ -693,7 +662,7 @@ with st.sidebar:
     st.caption("Small steps, big love.")
 
 # Recalculate after selecting the theme.
-C = THEMES[st.session_state.theme]
+C = THEMES["Dark"]
 
 # Streamlit reruns after a theme change; the CSS above uses the
 # theme value available at the start of that rerun.
@@ -831,16 +800,32 @@ if page == "Home":
     st.markdown("---")
     section_title("Little things to remember", "Your home hub, all in one place.")
 
-    q1, q2, q3 = st.columns(3)
+    # Native Streamlit cards: reliable rendering (no raw HTML in Markdown).
+    q1, q2, q3 = st.columns(3, gap="large")
 
     with q1:
-        card("Tasks", "Share responsibilities and celebrate each finished task.", "✓")
+        with st.container(border=True):
+            st.markdown("### ✓  Tasks")
+            st.write("Share responsibilities and celebrate each finished task.")
+            if st.button("Open tasks →", key="home_open_tasks", use_container_width=True):
+                st.session_state["_jump_page"] = "Tasks"
+                st.rerun()
 
     with q2:
-        card("Groceries", "Keep your shopping list simple and up to date.", "🛒")
+        with st.container(border=True):
+            st.markdown("### 🛒  Groceries")
+            st.write("Keep your shopping list simple and up to date.")
+            if st.button("Open groceries →", key="home_open_groceries", use_container_width=True):
+                st.session_state["_jump_page"] = "Groceries"
+                st.rerun()
 
     with q3:
-        card("Family notes", "Save messages, reminders, and little memories.", "♡")
+        with st.container(border=True):
+            st.markdown("### ♡  Family notes")
+            st.write("Save messages, reminders, and little memories.")
+            if st.button("Open notes →", key="home_open_notes", use_container_width=True):
+                st.session_state["_jump_page"] = "Family Notes"
+                st.rerun()
 
 
 # =========================================================
