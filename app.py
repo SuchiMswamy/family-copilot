@@ -1,665 +1,995 @@
-import streamlit as st
-from datetime import date, datetime
 
-# --------------------------------------------------
-# PAGE CONFIGURATION
-# --------------------------------------------------
+import html
+from datetime import date, datetime
+import streamlit as st
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
 st.set_page_config(
-    page_title="Our Family Hub — Suchi & Abi",
+    page_title="Our Family Hub | Suchi & Abi",
     page_icon="🏡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# --------------------------------------------------
-# THEME CONFIGURATION
-# --------------------------------------------------
+# =========================================================
+# THEMES
+# =========================================================
 THEMES = {
-    "Light": {
-        "bg": "#FFFFFF",
-        "surface": "#F4F5F7",
-        "text": "#202124",
-        "muted": "#5F6368",
-        "border": "#DADCE0",
-        "accent": "#456B82",
+    "Pastel": {
+        "bg": "#FBF7F5",
+        "sidebar": "#F3EAE8",
+        "card": "#FFFFFF",
+        "text": "#382F35",
+        "muted": "#766B72",
+        "border": "#E8DCD9",
+        "accent": "#986B80",
+        "accent_soft": "#F2E4EA",
         "input": "#FFFFFF",
-        "success": "#DDEFE2",
+        "shadow": "0 4px 20px rgba(69, 44, 53, 0.045)",
+    },
+    "Light": {
+        "bg": "#F5F7FA",
+        "sidebar": "#FFFFFF",
+        "card": "#FFFFFF",
+        "text": "#202938",
+        "muted": "#657184",
+        "border": "#E1E6ED",
+        "accent": "#416A88",
+        "accent_soft": "#EAF1F7",
+        "input": "#FFFFFF",
+        "shadow": "0 4px 20px rgba(30, 50, 75, 0.045)",
     },
     "Dark": {
-        "bg": "#17191C",
-        "surface": "#25282D",
-        "text": "#F4F5F7",
-        "muted": "#C1C5CC",
-        "border": "#484D55",
-        "accent": "#A9C9EB",
-        "input": "#30343A",
-        "success": "#244234",
-    },
-    "Pastel": {
-        "bg": "#FFF9F6",
-        "surface": "#F5EAEF",
-        "text": "#40343B",
-        "muted": "#695B64",
-        "border": "#E3D0DA",
-        "accent": "#80566F",
-        "input": "#FFFFFF",
-        "success": "#E3F0E4",
+        "bg": "#15171B",
+        "sidebar": "#1C1F24",
+        "card": "#20242A",
+        "text": "#F2F3F5",
+        "muted": "#B4BBC6",
+        "border": "#373D46",
+        "accent": "#B5CDE9",
+        "accent_soft": "#303D4B",
+        "input": "#252A31",
+        "shadow": "0 4px 20px rgba(0, 0, 0, 0.12)",
     },
 }
 
-if "selected_theme" not in st.session_state:
-    st.session_state.selected_theme = "Pastel"
-
-# --------------------------------------------------
+# =========================================================
 # SESSION STATE
-# --------------------------------------------------
+# =========================================================
 DEFAULTS = {
+    "theme": "Pastel",
     "tasks": [],
     "groceries": [],
     "appointments": [],
     "notes": [],
     "shopping_history": [],
     "mood": "Happy",
+    "task_filter": "All",
 }
 
 for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# --------------------------------------------------
-# THEME SELECTOR
-# --------------------------------------------------
-with st.sidebar:
-    st.markdown("## 🏡 Our Family Hub")
-    st.caption("A little space for our everyday life")
+C = THEMES[st.session_state.theme]
 
-    st.selectbox(
-        "🎨 Choose your theme",
-        ["Light", "Dark", "Pastel"],
-        key="selected_theme",
+
+# =========================================================
+# UTILITIES
+# =========================================================
+def safe(value):
+    """Escape user-entered text before displaying it in HTML."""
+    return html.escape(str(value))
+
+
+def pretty_date(value):
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%d %b %Y")
+    return str(value)
+
+
+def record_history(action, item):
+    st.session_state.shopping_history.append({
+        "action": action,
+        "item": item,
+        "date": datetime.now().strftime("%d %b %Y · %H:%M"),
+    })
+
+
+def card(title, description="", icon="✨", eyebrow=None):
+    """Premium reusable information card."""
+    eyebrow_html = (
+        f'<div class="eyebrow">{safe(eyebrow)}</div>'
+        if eyebrow else ""
     )
-
-    st.divider()
-    st.markdown("### 💕 Our little home")
-    st.caption("Suchi & Abi")
-    st.caption("Small steps, big love.")
-
-colors = THEMES[st.session_state.selected_theme]
-
-# --------------------------------------------------
-# CONSISTENT, READABLE STYLING
-# --------------------------------------------------
-st.markdown(
-    f"""
-    <style>
-    .stApp {{
-        background-color: {colors["bg"]};
-        color: {colors["text"]};
-    }}
-
-    .stApp,
-    .stApp p,
-    .stApp span,
-    .stApp label,
-    .stApp li,
-    .stApp h1,
-    .stApp h2,
-    .stApp h3,
-    .stApp h4,
-    .stApp h5,
-    .stApp h6,
-    .stApp [data-testid="stMarkdownContainer"] {{
-        color: {colors["text"]};
-    }}
-
-    section[data-testid="stSidebar"] {{
-        background-color: {colors["surface"]};
-    }}
-
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {{
-        color: {colors["text"]};
-    }}
-
-    [data-testid="stVerticalBlockBorderWrapper"],
-    [data-testid="stExpander"] {{
-        border-color: {colors["border"]};
-        border-radius: 12px;
-    }}
-
-    .stApp input,
-    .stApp textarea,
-    .stApp [data-baseweb="select"] > div {{
-        color: {colors["text"]};
-        background-color: {colors["input"]};
-        border-color: {colors["border"]};
-    }}
-
-    .stApp [data-baseweb="select"] * {{
-        color: {colors["text"]};
-    }}
-
-    [data-baseweb="popover"],
-    [data-baseweb="menu"],
-    [role="listbox"] {{
-        background-color: {colors["surface"]};
-    }}
-
-    .stApp .stButton > button,
-    .stApp .stDownloadButton > button {{
-        background-color: {colors["surface"]};
-        color: {colors["text"]};
-        border: 1px solid {colors["border"]};
-        border-radius: 10px;
-        min-height: 40px;
-    }}
-
-    .stApp .stButton > button:hover,
-    .stApp .stDownloadButton > button:hover {{
-        border-color: {colors["accent"]};
-        color: {colors["accent"]};
-    }}
-
-    .stApp [data-testid="stWidgetLabel"] p,
-    .stApp [data-testid="stCaptionContainer"] p {{
-        color: {colors["muted"]};
-    }}
-
-    .family-card {{
-        background-color: {colors["surface"]};
-        color: {colors["text"]};
-        border: 1px solid {colors["border"]};
-        border-radius: 16px;
-        padding: 18px;
-        margin-bottom: 12px;
-    }}
-
-    .family-card h3 {{
-        color: {colors["text"]};
-        margin-top: 0;
-    }}
-
-    .family-card p {{
-        color: {colors["muted"]};
-    }}
-
-    .hero {{
-        background-color: {colors["surface"]};
-        color: {colors["text"]};
-        border: 1px solid {colors["border"]};
-        border-radius: 20px;
-        padding: 28px;
-        margin-bottom: 20px;
-    }}
-
-    .hero h1 {{
-        color: {colors["text"]};
-        margin-bottom: 8px;
-    }}
-
-    .hero p {{
-        color: {colors["muted"]};
-        font-size: 1.05rem;
-    }}
-
-    div[data-testid="stMetric"] {{
-        background-color: {colors["surface"]};
-        border: 1px solid {colors["border"]};
-        padding: 14px;
-        border-radius: 12px;
-    }}
-
-    div[data-testid="stMetric"] label,
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
-        color: {colors["text"]};
-    }}
-
-    .stApp hr {{
-        border-color: {colors["border"]};
-    }}
-
-    #MainMenu, footer {{
-        visibility: hidden;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# --------------------------------------------------
-# REUSABLE HELPERS
-# --------------------------------------------------
-def family_card(title, body):
-    """Display a simple themed information card."""
     st.markdown(
         f"""
-        <div class="family-card">
-            <h3>{title}</h3>
-            <p>{body}</p>
+        <div class="premium-card">
+            {eyebrow_html}
+            <div class="card-heading">
+                <span class="card-icon">{safe(icon)}</span>
+                <span>{safe(title)}</span>
+            </div>
+            <div class="card-description">{safe(description)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def format_date(value):
-    if isinstance(value, (date, datetime)):
-        return value.strftime("%d %b %Y")
-    return str(value)
+def metric_card(label, value, icon, detail):
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-top">
+                <span>{safe(label)}</span>
+                <span class="metric-icon">{safe(icon)}</span>
+            </div>
+            <div class="metric-value">{safe(value)}</div>
+            <div class="metric-detail">{safe(detail)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def add_history(action, item):
-    st.session_state.shopping_history.append({
-        "action": action,
-        "item": item,
-        "date": datetime.now().strftime("%d %b %Y, %H:%M"),
-    })
+def section_title(title, subtitle=None):
+    st.markdown(f'<div class="section-title">{safe(title)}</div>',
+                unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(
+            f'<div class="section-subtitle">{safe(subtitle)}</div>',
+            unsafe_allow_html=True,
+        )
 
 
-# --------------------------------------------------
-# HEADER
-# --------------------------------------------------
+# =========================================================
+# GLOBAL PREMIUM STYLING
+# =========================================================
 st.markdown(
-    """
+    f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+
+    :root {{
+        --bg: {C["bg"]};
+        --sidebar: {C["sidebar"]};
+        --card: {C["card"]};
+        --text: {C["text"]};
+        --muted: {C["muted"]};
+        --border: {C["border"]};
+        --accent: {C["accent"]};
+        --accent-soft: {C["accent_soft"]};
+        --input: {C["input"]};
+    }}
+
+    html, body, [class*="css"] {{
+        font-family: 'DM Sans', sans-serif;
+    }}
+
+    .stApp {{
+        background: var(--bg);
+        color: var(--text);
+    }}
+
+    [data-testid="stHeader"] {{
+        background: transparent;
+    }}
+
+    [data-testid="stMainBlockContainer"] {{
+        max-width: 1450px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }}
+
+    section[data-testid="stSidebar"] {{
+        background: var(--sidebar);
+        border-right: 1px solid var(--border);
+    }}
+
+    section[data-testid="stSidebar"] > div {{
+        padding-top: 1.8rem;
+    }}
+
+    .stApp p,
+    .stApp label,
+    .stApp li,
+    .stApp h1,
+    .stApp h2,
+    .stApp h3,
+    .stApp h4,
+    .stApp [data-testid="stMarkdownContainer"],
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] label {{
+        color: var(--text);
+    }}
+
+    h1, h2, h3 {{
+        letter-spacing: -0.035em;
+    }}
+
+    h1, .brand-title {{
+        font-family: 'Playfair Display', Georgia, serif !important;
+    }}
+
+    .brand-title {{
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.2;
+    }}
+
+    .brand-subtitle {{
+        font-size: 0.84rem;
+        color: var(--muted);
+        margin-top: 0.35rem;
+        line-height: 1.5;
+    }}
+
+    .sidebar-label {{
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin: 1.5rem 0 0.5rem 0;
+    }}
+
+    .hero {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: clamp(22px, 4vw, 38px);
+        box-shadow: {C["shadow"]};
+        margin-bottom: 1.35rem;
+    }}
+
+    .hero-kicker {{
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-bottom: 0.8rem;
+    }}
+
+    .hero-title {{
+        font-family: 'Playfair Display', Georgia, serif;
+        font-size: clamp(2rem, 4vw, 3.1rem);
+        line-height: 1.15;
+        letter-spacing: -0.045em;
+        color: var(--text);
+        margin: 0;
+    }}
+
+    .hero-copy {{
+        color: var(--muted);
+        font-size: 1rem;
+        margin-top: 0.8rem;
+        line-height: 1.8;
+        max-width: 650px;
+    }}
+
+    .hero-footer {{
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 1.2rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+    }}
+
+    .section-title {{
+        font-family: 'Playfair Display', Georgia, serif;
+        color: var(--text);
+        font-size: 1.55rem;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        margin: 1.25rem 0 0.25rem 0;
+    }}
+
+    .section-subtitle {{
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        line-height: 1.65;
+    }}
+
+    .metric-card {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 19px;
+        min-height: 142px;
+        box-shadow: {C["shadow"]};
+        margin-bottom: 0.7rem;
+    }}
+
+    .metric-top {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.85rem;
+        font-weight: 500;
+    }}
+
+    .metric-icon {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
+        background: var(--accent-soft);
+        font-size: 1.05rem;
+    }}
+
+    .metric-value {{
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        margin-top: 12px;
+        color: var(--text);
+    }}
+
+    .metric-detail {{
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin-top: 3px;
+    }}
+
+    .premium-card {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: {C["shadow"]};
+        margin-bottom: 0.75rem;
+    }}
+
+    .eyebrow {{
+        color: var(--accent);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        font-weight: 700;
+        margin-bottom: 0.65rem;
+    }}
+
+    .card-heading {{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text);
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.6rem;
+    }}
+
+    .card-icon {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 35px;
+        height: 35px;
+        border-radius: 11px;
+        background: var(--accent-soft);
+        flex-shrink: 0;
+    }}
+
+    .card-description {{
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.7;
+        overflow-wrap: anywhere;
+    }}
+
+    [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: var(--card);
+        border-color: var(--border);
+        border-radius: 16px;
+        box-shadow: {C["shadow"]};
+    }}
+
+    [data-testid="stExpander"] {{
+        background: var(--card);
+        border-color: var(--border);
+        border-radius: 14px;
+    }}
+
+    .stApp input,
+    .stApp textarea,
+    .stApp [data-baseweb="select"] > div {{
+        background-color: var(--input);
+        color: var(--text);
+        border-color: var(--border);
+        border-radius: 10px;
+    }}
+
+    .stApp [data-baseweb="select"] * {{
+        color: var(--text);
+    }}
+
+    [data-baseweb="popover"],
+    [data-baseweb="menu"],
+    [role="listbox"] {{
+        background-color: var(--card);
+        color: var(--text);
+    }}
+
+    .stApp .stButton > button,
+    .stApp .stDownloadButton > button {{
+        background: var(--card);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        min-height: 42px;
+        font-weight: 600;
+        transition: border-color 0.15s ease;
+    }}
+
+    .stApp .stButton > button:hover,
+    .stApp .stDownloadButton > button:hover {{
+        border-color: var(--accent);
+        color: var(--accent);
+    }}
+
+    .stApp [data-testid="stCaptionContainer"] p,
+    .stApp small {{
+        color: var(--muted);
+    }}
+
+    .stApp hr {{
+        border-color: var(--border);
+        margin: 1.5rem 0;
+    }}
+
+    [data-testid="stAlert"] {{
+        border-radius: 12px;
+    }}
+
+    div[data-testid="stMetric"] {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 15px;
+    }}
+
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
+        color: var(--text);
+    }}
+
+    a {{
+        color: var(--accent);
+    }}
+
+    @media (max-width: 700px) {{
+        [data-testid="stMainBlockContainer"] {{
+            padding-top: 1rem;
+        }}
+
+        .hero {{
+            border-radius: 18px;
+            padding: 22px;
+        }}
+
+        .metric-card {{
+            padding: 14px;
+        }}
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+with st.sidebar:
+    st.markdown('<div class="brand-title">Our Family Hub</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="brand-subtitle">A calmer way to organise life, together.</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="sidebar-label">Appearance</div>',
+                unsafe_allow_html=True)
+
+    st.selectbox(
+        "Choose your style",
+        ["Pastel", "Light", "Dark"],
+        key="theme",
+        label_visibility="collapsed",
+    )
+
+    st.caption("Your theme updates automatically.")
+
+    st.markdown('<div class="sidebar-label">Your space</div>',
+                unsafe_allow_html=True)
+
+    page = st.radio(
+        "Navigate",
+        [
+            "Home",
+            "Tasks",
+            "Groceries",
+            "Appointments",
+            "Family Notes",
+            "Shopping History",
+        ],
+        format_func=lambda x: {
+            "Home": "🏡   Home",
+            "Tasks": "✓   Tasks",
+            "Groceries": "🛒   Groceries",
+            "Appointments": "▦   Appointments",
+            "Family Notes": "♡   Family Notes",
+            "Shopping History": "↗   Shopping History",
+        }[x],
+        label_visibility="collapsed",
+    )
+
+    st.divider()
+    st.caption("MADE FOR TWO")
+    st.markdown("**Suchi & Abi** 💗")
+    st.caption("Small steps, big love.")
+
+# Recalculate after selecting the theme.
+C = THEMES[st.session_state.theme]
+
+# Streamlit reruns after a theme change; the CSS above uses the
+# theme value available at the start of that rerun.
+
+
+# =========================================================
+# HERO
+# =========================================================
+today = date.today()
+
+st.markdown(
+    f"""
     <div class="hero">
-        <h1>🏡 Our Family Hub</h1>
-        <p>Suchi & Abi · Organising life, one little step at a time.</p>
+        <div class="hero-kicker">YOUR HOME · YOUR LITTLE WORLD</div>
+        <div class="hero-title">A little more organised.<br>A little more together.</div>
+        <div class="hero-copy">
+            Welcome back, Suchi &amp; Abi. Keep track of everyday things,
+            make space for the good moments, and take life one step at a time.
+        </div>
+        <div class="hero-footer">
+            {today.strftime("%A, %d %B %Y")} &nbsp; · &nbsp; Made with love ♡
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-today = date.today()
-
-st.caption(
-    f"📅 Today is {today.strftime('%A, %d %B %Y')} "
-    f"· Current theme: {st.session_state.selected_theme}"
-)
-
-# --------------------------------------------------
-# NAVIGATION
-# --------------------------------------------------
-pages = [
-    "🏠 Home",
-    "✅ Tasks",
-    "🛒 Groceries",
-    "📅 Appointments",
-    "💌 Family Notes",
-    "🧾 Shopping History",
-]
-
-page = st.sidebar.radio("Navigate", pages)
-
-# ==================================================
+# =========================================================
 # HOME
-# ==================================================
-if page == "🏠 Home":
-    st.subheader("Welcome home, Suchi & Abi! 💕")
+# =========================================================
+if page == "Home":
+    pending = sum(not t["done"] for t in st.session_state.tasks)
+    bought = sum(g["bought"] for g in st.session_state.groceries)
+    remaining_groceries = len(st.session_state.groceries) - bought
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        pending = sum(
-            1 for task in st.session_state.tasks
-            if not task["done"]
-        )
-        st.metric("Pending tasks", pending)
-
-    with col2:
-        remaining = sum(
-            1 for item in st.session_state.groceries
-            if not item["bought"]
-        )
-        st.metric("Groceries to buy", remaining)
-
-    with col3:
-        st.metric(
-            "Upcoming appointments",
-            len(st.session_state.appointments),
-        )
-
-    st.markdown("### 💗 Our daily mood")
-
-    mood_options = [
-        "Happy",
-        "Relaxed",
-        "Grateful",
-        "Busy",
-        "Tired",
-        "Need a little love",
-    ]
-
-    st.session_state.mood = st.selectbox(
-        "How are we feeling today?",
-        mood_options,
-        index=mood_options.index(st.session_state.mood)
-        if st.session_state.mood in mood_options else 0,
+    upcoming = sum(
+        a["date"] >= today for a in st.session_state.appointments
     )
 
-    mood_messages = {
-        "Happy": "Keep collecting those little happy moments! ☀️",
-        "Relaxed": "Take it slow. There is no rush. 🌿",
-        "Grateful": "There is always something lovely to appreciate. 💕",
-        "Busy": "One thing at a time. You have got this! 🌸",
-        "Tired": "Rest is productive, too. Be kind to yourselves. ☁️",
-        "Need a little love": "A hug, a kind word, and a fresh start. ❤️",
-    }
+    m1, m2, m3 = st.columns(3)
 
-    family_card(
-        "Today's little reminder 💌",
-        mood_messages[st.session_state.mood],
-    )
+    with m1:
+        metric_card("Open tasks", pending, "✓", "Little things, one step at a time")
 
-    st.markdown("### 🌷 A little note for us")
+    with m2:
+        metric_card("Shopping list", remaining_groceries, "🛒", "Items still to pick up")
 
-    st.info(
-        "We don't have to make every day perfect. "
-        "Let's make our home a place where we feel loved, "
-        "supported, and happy to come back to."
-    )
+    with m3:
+        metric_card("Coming up", upcoming, "▦", "Future appointments")
 
-    st.markdown("### 📌 Quick overview")
+    section_title("Your day, at a glance", "A little overview of what needs your attention.")
 
-    if st.session_state.tasks:
-        st.markdown("**Your next tasks**")
-        for task in st.session_state.tasks[:5]:
-            status = "✅" if task["done"] else "⬜"
-            st.write(f"{status} {task['name']}")
-    else:
-        st.caption("No tasks yet. Add your first one in the Tasks section!")
+    left, right = st.columns([1.15, 0.85], gap="large")
 
-    if st.session_state.groceries:
-        st.markdown("**Your grocery list**")
-        for item in st.session_state.groceries[:5]:
-            status = "✅" if item["bought"] else "🛒"
-            st.write(f"{status} {item['name']}")
-
-# ==================================================
-# TASKS
-# ==================================================
-elif page == "✅ Tasks":
-    st.subheader("Our Tasks ✅")
-    st.write("Keep track of the little things that make life easier.")
-
-    with st.form("add_task_form", clear_on_submit=True):
-        task_name = st.text_input("Task name", placeholder="e.g. Tidy the living room")
-        assigned_to = st.selectbox("Assigned to", ["Both", "Suchi", "Abi"])
-        due_date = st.date_input("Due date", value=None)
-        priority = st.selectbox("Priority", ["Normal", "High", "Low"])
-        submitted = st.form_submit_button("➕ Add task")
-
-        if submitted:
-            if task_name.strip():
-                st.session_state.tasks.append({
-                    "name": task_name.strip(),
-                    "assigned": assigned_to,
-                    "due": due_date,
-                    "priority": priority,
-                    "done": False,
-                })
-                st.success("Task added!")
-                st.rerun()
-            else:
-                st.warning("Please enter a task name.")
-
-    st.divider()
-
-    if not st.session_state.tasks:
-        st.info("No tasks yet. Enjoy the breathing room, or add one above!")
-    else:
-        filter_status = st.radio(
-            "Show tasks",
-            ["All", "Pending", "Completed"],
-            horizontal=True,
+    with left:
+        card(
+            "A gentle reminder",
+            "You don't need to do everything today. Choose what matters, "
+            "help each other where you can, and leave a little room to rest.",
+            "♡",
+            "A NOTE FOR US",
         )
 
-        for index, task in enumerate(st.session_state.tasks):
-            if filter_status == "Pending" and task["done"]:
-                continue
-            if filter_status == "Completed" and not task["done"]:
-                continue
+        st.markdown("#### Tasks to tackle")
 
-            with st.container(border=True):
-                left, middle, right = st.columns([0.12, 0.68, 0.20])
+        open_tasks = [t for t in st.session_state.tasks if not t["done"]]
 
-                with left:
-                    new_status = st.checkbox(
-                        "Done",
-                        value=task["done"],
-                        key=f"task_done_{index}",
-                    )
-                    if new_status != task["done"]:
-                        task["done"] = new_status
-                        st.rerun()
-
-                with middle:
-                    st.markdown(f"**{task['name']}**")
+        if open_tasks:
+            for task in open_tasks[:5]:
+                with st.container(border=True):
+                    st.markdown(f"**{safe(task['name'])}**")
                     st.caption(
-                        f"Assigned: {task['assigned']} · "
-                        f"Priority: {task['priority']} · "
-                        f"Due: {format_date(task['due'])}"
+                        f"{task['assigned']} · {task['priority']} priority"
+                    )
+        else:
+            st.success("All caught up! Time for a little breathing room.")
+
+        if st.button("Open task list →", use_container_width=True):
+            st.session_state["_jump_page"] = "Tasks"
+            st.rerun()
+
+    with right:
+        card(
+            "Our daily mood",
+            "Check in with yourselves. A tiny moment of reflection "
+            "can make a busy day feel a little lighter.",
+            "☀️",
+            "HOW ARE WE FEELING?",
+        )
+
+        moods = [
+            "Happy",
+            "Relaxed",
+            "Grateful",
+            "Busy",
+            "Tired",
+            "Need a little love",
+        ]
+
+        st.selectbox(
+            "Today's mood",
+            moods,
+            key="mood",
+        )
+
+        mood_copy = {
+            "Happy": "Enjoy the lovely moments. ☀️",
+            "Relaxed": "Keep that peaceful feeling close. 🌿",
+            "Grateful": "Notice the little things that make life sweet. 💗",
+            "Busy": "One thing at a time. You have got this. 🌸",
+            "Tired": "Rest counts, too. Be kind to yourselves. ☁️",
+            "Need a little love": "A kind word or a hug can go a long way. ♡",
+        }
+
+        st.info(mood_copy[st.session_state.mood])
+
+        st.markdown("#### Next appointment")
+
+        future_appointments = sorted(
+            [a for a in st.session_state.appointments if a["date"] >= today],
+            key=lambda a: (a["date"], a["time"]),
+        )
+
+        if future_appointments:
+            a = future_appointments[0]
+            card(
+                a["title"],
+                f"{pretty_date(a['date'])} · {a['time']}"
+                + (f" · {a['location']}" if a["location"] else ""),
+                "📅",
+            )
+        else:
+            st.caption("Nothing scheduled just yet.")
+
+    st.markdown("---")
+    section_title("Little things to remember", "Your home hub, all in one place.")
+
+    q1, q2, q3 = st.columns(3)
+
+    with q1:
+        card("Tasks", "Share responsibilities and celebrate each finished task.", "✓")
+
+    with q2:
+        card("Groceries", "Keep your shopping list simple and up to date.", "🛒")
+
+    with q3:
+        card("Family notes", "Save messages, reminders, and little memories.", "♡")
+
+
+# =========================================================
+# TASKS
+# =========================================================
+elif page == "Tasks":
+    section_title("Our tasks", "Plan together without making the day feel complicated.")
+
+    with st.expander("＋ Add a new task", expanded=not st.session_state.tasks):
+        with st.form("task_form", clear_on_submit=True):
+            name = st.text_input("What needs doing?", placeholder="Tidy the living room")
+            c1, c2 = st.columns(2)
+            with c1:
+                assigned = st.selectbox("Who's taking it?", ["Both", "Suchi", "Abi"])
+            with c2:
+                priority = st.selectbox("Priority", ["Normal", "High", "Low"])
+
+            has_due = st.checkbox("Add a due date")
+            due = st.date_input("Due date", value=today) if has_due else None
+
+            if st.form_submit_button("Add task", use_container_width=True):
+                if name.strip():
+                    st.session_state.tasks.append({
+                        "name": name.strip(),
+                        "assigned": assigned,
+                        "priority": priority,
+                        "due": due,
+                        "done": False,
+                    })
+                    st.rerun()
+                else:
+                    st.warning("Please enter a task name.")
+
+    total = len(st.session_state.tasks)
+    completed = sum(t["done"] for t in st.session_state.tasks)
+    progress = completed / total if total else 0
+
+    st.markdown("#### Your progress")
+    st.progress(progress, text=f"{completed} of {total} tasks completed")
+
+    selected_filter = st.segmented_control(
+        "Filter tasks",
+        options=["All", "Open", "Completed"],
+        default="All",
+        key="task_filter",
+    )
+
+    tasks = list(enumerate(st.session_state.tasks))
+
+    if selected_filter == "Open":
+        tasks = [(i, t) for i, t in tasks if not t["done"]]
+    elif selected_filter == "Completed":
+        tasks = [(i, t) for i, t in tasks if t["done"]]
+
+    if not tasks:
+        st.info("Nothing to show here. Add a task whenever you're ready.")
+    else:
+        for i, task in tasks:
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([0.1, 0.68, 0.22])
+
+                with c1:
+                    checked = st.checkbox(
+                        "Complete",
+                        value=task["done"],
+                        key=f"task_check_{i}",
+                        label_visibility="collapsed",
                     )
 
-                with right:
-                    if st.button("🗑️ Delete", key=f"delete_task_{index}"):
-                        st.session_state.tasks.pop(index)
+                if checked != task["done"]:
+                    st.session_state.tasks[i]["done"] = checked
+                    st.rerun()
+
+                with c2:
+                    if task["done"]:
+                        st.markdown(f"~~{safe(task['name'])}~~")
+                    else:
+                        st.markdown(f"**{safe(task['name'])}**")
+
+                    due_text = (
+                        pretty_date(task["due"]) if task["due"] else "No due date"
+                    )
+                    st.caption(
+                        f"{task['assigned']} · {task['priority']} priority · {due_text}"
+                    )
+
+                with c3:
+                    if st.button("Delete", key=f"task_delete_{i}"):
+                        st.session_state.tasks.pop(i)
                         st.rerun()
 
-# ==================================================
+
+# =========================================================
 # GROCERIES
-# ==================================================
-elif page == "🛒 Groceries":
-    st.subheader("Our Grocery List 🛒")
+# =========================================================
+elif page == "Groceries":
+    section_title("Grocery list", "A calmer shopping trip starts with a simple list.")
 
-    with st.form("add_grocery_form", clear_on_submit=True):
-        grocery_name = st.text_input(
-            "Item",
-            placeholder="e.g. Milk, apples, bread",
-        )
-        quantity = st.text_input("Quantity", placeholder="e.g. 2 packs")
-        submitted = st.form_submit_button("➕ Add to list")
+    with st.expander("＋ Add grocery item", expanded=not st.session_state.groceries):
+        with st.form("grocery_form", clear_on_submit=True):
+            name = st.text_input("Item", placeholder="Fresh strawberries")
+            quantity = st.text_input("Quantity", placeholder="2 packs")
+            if st.form_submit_button("Add to list", use_container_width=True):
+                if name.strip():
+                    st.session_state.groceries.append({
+                        "name": name.strip(),
+                        "quantity": quantity.strip() or "As needed",
+                        "bought": False,
+                    })
+                    record_history("Added", name.strip())
+                    st.rerun()
+                else:
+                    st.warning("Please enter an item.")
 
-        if submitted:
-            if grocery_name.strip():
-                item = {
-                    "name": grocery_name.strip(),
-                    "quantity": quantity.strip() or "Not specified",
-                    "bought": False,
-                }
-                st.session_state.groceries.append(item)
-                add_history("Added to grocery list", item["name"])
-                st.success("Added to your grocery list!")
-                st.rerun()
-            else:
-                st.warning("Please enter an item name.")
+    items = st.session_state.groceries
+    remaining = sum(not item["bought"] for item in items)
+    st.caption(f"{remaining} items left to pick up")
 
-    st.divider()
-
-    if not st.session_state.groceries:
-        st.info("Your grocery list is empty.")
+    if not items:
+        card("Your list is clear", "Add groceries above whenever you need them.", "🛒")
     else:
-        for index, item in enumerate(st.session_state.groceries):
+        for i, item in enumerate(items):
             with st.container(border=True):
-                col1, col2, col3 = st.columns([0.14, 0.66, 0.20])
+                c1, c2, c3 = st.columns([0.1, 0.68, 0.22])
 
-                with col1:
+                with c1:
                     checked = st.checkbox(
                         "Bought",
                         value=item["bought"],
-                        key=f"grocery_bought_{index}",
+                        key=f"grocery_check_{i}",
+                        label_visibility="collapsed",
                     )
-                    if checked != item["bought"]:
-                        item["bought"] = checked
-                        if checked:
-                            add_history("Marked as bought", item["name"])
+
+                if checked != item["bought"]:
+                    st.session_state.groceries[i]["bought"] = checked
+                    if checked:
+                        record_history("Marked as bought", item["name"])
+                    st.rerun()
+
+                with c2:
+                    st.markdown(
+                        f"~~{safe(item['name'])}~~"
+                        if item["bought"] else f"**{safe(item['name'])}**"
+                    )
+                    st.caption(f"Quantity: {safe(item['quantity'])}")
+
+                with c3:
+                    if st.button("Remove", key=f"grocery_delete_{i}"):
+                        record_history("Removed", item["name"])
+                        st.session_state.groceries.pop(i)
                         st.rerun()
 
-                with col2:
-                    st.markdown(f"**{item['name']}**")
-                    st.caption(f"Quantity: {item['quantity']}")
-
-                with col3:
-                    if st.button("🗑️ Remove", key=f"delete_grocery_{index}"):
-                        add_history("Removed from grocery list", item["name"])
-                        st.session_state.groceries.pop(index)
-                        st.rerun()
-
-        if st.button("🧹 Clear bought items"):
+        if st.button("Clear purchased items"):
             st.session_state.groceries = [
-                item for item in st.session_state.groceries
-                if not item["bought"]
+                item for item in items if not item["bought"]
             ]
             st.rerun()
 
-# ==================================================
+
+# =========================================================
 # APPOINTMENTS
-# ==================================================
-elif page == "📅 Appointments":
-    st.subheader("Our Appointments 📅")
+# =========================================================
+elif page == "Appointments":
+    section_title("Appointments", "Keep the important dates close at hand.")
 
-    with st.form("add_appointment_form", clear_on_submit=True):
-        title = st.text_input(
-            "Appointment",
-            placeholder="e.g. Dentist, family dinner",
-        )
-        appointment_date = st.date_input("Date", value=date.today())
-        appointment_time = st.time_input("Time")
-        location = st.text_input("Location (optional)")
-        notes = st.text_area("Notes (optional)")
-        submitted = st.form_submit_button("➕ Add appointment")
+    with st.expander("＋ Add appointment", expanded=not st.session_state.appointments):
+        with st.form("appointment_form", clear_on_submit=True):
+            title = st.text_input("What's happening?", placeholder="Family dinner")
+            c1, c2 = st.columns(2)
+            with c1:
+                appointment_date = st.date_input("Date", value=today)
+            with c2:
+                appointment_time = st.time_input("Time")
 
-        if submitted:
-            if title.strip():
-                st.session_state.appointments.append({
-                    "title": title.strip(),
-                    "date": appointment_date,
-                    "time": appointment_time.strftime("%H:%M"),
-                    "location": location.strip(),
-                    "notes": notes.strip(),
-                })
-                st.success("Appointment added!")
-                st.rerun()
-            else:
-                st.warning("Please enter an appointment name.")
+            location = st.text_input("Location", placeholder="Optional")
+            details = st.text_area("Notes", placeholder="Anything to remember?")
 
-    st.divider()
+            if st.form_submit_button("Save appointment", use_container_width=True):
+                if title.strip():
+                    st.session_state.appointments.append({
+                        "title": title.strip(),
+                        "date": appointment_date,
+                        "time": appointment_time.strftime("%H:%M"),
+                        "location": location.strip(),
+                        "notes": details.strip(),
+                    })
+                    st.rerun()
+                else:
+                    st.warning("Please enter an appointment title.")
 
     appointments = sorted(
         enumerate(st.session_state.appointments),
-        key=lambda pair: (pair[1]["date"], pair[1]["time"]),
+        key=lambda x: (x[1]["date"], x[1]["time"]),
     )
 
     if not appointments:
-        st.info("Nothing scheduled yet.")
+        card("A little breathing room", "No appointments added yet.", "📅")
     else:
-        for original_index, appointment in appointments:
+        for i, a in appointments:
             with st.container(border=True):
-                col1, col2 = st.columns([0.8, 0.2])
+                c1, c2 = st.columns([0.78, 0.22])
 
-                with col1:
-                    st.markdown(f"### 📌 {appointment['title']}")
-                    st.write(
-                        f"**Date:** {format_date(appointment['date'])}"
-                        f" · **Time:** {appointment['time']}"
-                    )
-                    if appointment["location"]:
-                        st.write(f"**Location:** {appointment['location']}")
-                    if appointment["notes"]:
-                        st.write(appointment["notes"])
+                with c1:
+                    st.markdown(f"### {safe(a['title'])}")
+                    st.caption(f"📅 {pretty_date(a['date'])} · 🕒 {a['time']}")
+                    if a["location"]:
+                        st.write(f"**Location:** {safe(a['location'])}")
+                    if a["notes"]:
+                        st.write(a["notes"])
 
-                with col2:
-                    if st.button(
-                        "🗑️ Delete",
-                        key=f"delete_appointment_{original_index}",
-                    ):
-                        st.session_state.appointments.pop(original_index)
+                    if a["date"] < today:
+                        st.caption("Past appointment")
+
+                with c2:
+                    if st.button("Delete", key=f"appointment_delete_{i}"):
+                        st.session_state.appointments.pop(i)
                         st.rerun()
 
-# ==================================================
+
+# =========================================================
 # FAMILY NOTES
-# ==================================================
-elif page == "💌 Family Notes":
-    st.subheader("Family Notes 💌")
-    st.write("Little reminders, lovely memories, and things to remember.")
+# =========================================================
+elif page == "Family Notes":
+    section_title("Family notes", "Messages, reminders, and memories worth keeping.")
 
-    with st.form("add_note_form", clear_on_submit=True):
-        note_title = st.text_input(
-            "Title",
-            placeholder="e.g. Something to remember",
-        )
-        note_body = st.text_area(
-            "Your note",
-            placeholder="Write your note here...",
-            height=150,
-        )
-        submitted = st.form_submit_button("💌 Save note")
+    with st.expander("＋ Write a note", expanded=not st.session_state.notes):
+        with st.form("note_form", clear_on_submit=True):
+            title = st.text_input("Title", placeholder="A little reminder")
+            body = st.text_area(
+                "Your note",
+                placeholder="Write something you want to remember...",
+                height=140,
+            )
 
-        if submitted:
-            if note_body.strip():
-                st.session_state.notes.append({
-                    "title": note_title.strip() or "A little note",
-                    "body": note_body.strip(),
-                    "created": datetime.now().strftime("%d %b %Y, %H:%M"),
-                })
-                st.success("Your note has been saved!")
-                st.rerun()
-            else:
-                st.warning("Write something before saving your note.")
-
-    st.divider()
+            if st.form_submit_button("Save note", use_container_width=True):
+                if body.strip():
+                    st.session_state.notes.append({
+                        "title": title.strip() or "A little note",
+                        "body": body.strip(),
+                        "created": datetime.now().strftime("%d %b %Y · %H:%M"),
+                    })
+                    st.rerun()
+                else:
+                    st.warning("Write a note before saving.")
 
     if not st.session_state.notes:
-        st.info("No notes yet. Leave a little message for your future selves.")
+        card("A space for your thoughts", "Your saved notes will appear here.", "♡")
     else:
-        for index, note in enumerate(reversed(st.session_state.notes)):
-            original_index = len(st.session_state.notes) - 1 - index
-
+        for i in range(len(st.session_state.notes) - 1, -1, -1):
+            note = st.session_state.notes[i]
             with st.container(border=True):
-                st.markdown(f"### 💗 {note['title']}")
+                st.markdown(f"### ♡ {safe(note['title'])}")
                 st.caption(note["created"])
                 st.write(note["body"])
 
-                if st.button("🗑️ Delete note", key=f"delete_note_{original_index}"):
-                    st.session_state.notes.pop(original_index)
+                if st.button("Delete note", key=f"note_delete_{i}"):
+                    st.session_state.notes.pop(i)
                     st.rerun()
 
-# ==================================================
-# SHOPPING HISTORY
-# ==================================================
-elif page == "🧾 Shopping History":
-    st.subheader("Shopping History 🧾")
-    st.write("A simple record of grocery-list changes.")
 
-    if not st.session_state.shopping_history:
-        st.info("Your shopping history will appear here as you use the list.")
+# =========================================================
+# SHOPPING HISTORY
+# =========================================================
+elif page == "Shopping History":
+    section_title("Shopping history", "A simple record of changes to your grocery list.")
+
+    history = st.session_state.shopping_history
+
+    if not history:
+        card("Your history starts here", "Add or update grocery items to see activity.", "↗")
     else:
-        for entry in reversed(st.session_state.shopping_history):
+        st.caption(f"{len(history)} recorded actions")
+
+        for entry in reversed(history):
             with st.container(border=True):
-                st.markdown(f"**{entry['action']}**")
-                st.write(entry["item"])
+                st.markdown(f"**{safe(entry['action'])}**")
+                st.write(safe(entry["item"]))
                 st.caption(entry["date"])
 
-        if st.button("🧹 Clear shopping history"):
+        if st.button("Clear history"):
             st.session_state.shopping_history = []
             st.rerun()
 
-# --------------------------------------------------
+
+# =========================================================
 # FOOTER
-# --------------------------------------------------
-st.divider()
+# =========================================================
+st.markdown("---")
 st.markdown(
     f"""
     <div style="
         text-align: center;
-        color: {colors["muted"]};
-        padding: 12px;
+        color: {C["muted"]};
+        padding: 14px 0 8px 0;
+        font-size: 0.85rem;
+        line-height: 1.9;
     ">
-        Made with 💗 for Suchi & Abi<br>
-        Small steps, big love 🏡
+        <span style="color: {C["accent"]};">♡</span>
+        &nbsp; Suchi &amp; Abi &nbsp; · &nbsp; Our little corner of the world
+        <br>
+        <span style="font-size: 0.78rem;">
+            Small steps, big love.
+        </span>
     </div>
     """,
     unsafe_allow_html=True,
