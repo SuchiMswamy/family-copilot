@@ -68,35 +68,72 @@ def sync_navigation():
 def activity(action,item):
     add("activity",{"action":action,"item":item,"when":stamp()})
 
+def is_recent(item, hours=24):
+    raw=item.get("created_at") or item.get("created") or item.get("updated_at") or ""
+    try: return (datetime.now()-datetime.fromisoformat(str(raw))).total_seconds() <= hours*3600
+    except (ValueError,TypeError): return False
+
+def task_is_overdue(item):
+    return bool(not item.get("done") and item.get("due") and as_date(item["due"]) < today)
+
 init_db()
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
-:root{{--bg:{DARK['bg']};--side:{DARK['sidebar']};--card:{DARK['card']};--card2:{DARK['card2']};--text:{DARK['text']};--muted:{DARK['muted']};--border:{DARK['border']};--accent:{DARK['accent']};--accentbg:{DARK['accent_bg']};--input:{DARK['input']};}}
-html,body,[class*="css"]{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}}
-[data-testid="stHeader"]{{background:transparent}} [data-testid="stMainBlockContainer"]{{max-width:1500px;padding-top:1.2rem;padding-bottom:3rem}}
-section[data-testid="stSidebar"]{{background:var(--side);border-right:1px solid var(--border)}} section[data-testid="stSidebar"]>div{{padding-top:1.3rem}}
+:root{{--bg:{DARK['bg']};--side:{DARK['sidebar']};--card:{DARK['card']};--card2:{DARK['card2']};--text:{DARK['text']};--muted:{DARK['muted']};--border:{DARK['border']};--accent:{DARK['accent']};--accentbg:{DARK['accent_bg']};--input:{DARK['input']};--good:{DARK['good']};--warn:{DARK['warn']};}}
+/* Helvetica-first typography throughout; mobile-friendly sizing */
+html,body,[class*="css"],button,input,textarea,select{{font-family:Helvetica,Arial,sans-serif!important}}
+.stApp{{background:var(--bg);color:var(--text);font-size:17px}}
+[data-testid="stHeader"]{{background:transparent}}
+[data-testid="stMainBlockContainer"]{{max-width:1500px;padding:1.2rem 1.25rem 3rem}}
+section[data-testid="stSidebar"]{{background:var(--side);border-right:1px solid var(--border)}}
+section[data-testid="stSidebar"]>div{{padding:1.3rem .85rem}}
 .stApp p,.stApp label,.stApp li,.stApp h1,.stApp h2,.stApp h3,.stApp h4,.stApp [data-testid="stMarkdownContainer"],section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:var(--text)}}
-h1,h2,h3,.brand,.hero-title,.section-title{{font-family:'Playfair Display',Georgia,serif!important;letter-spacing:-.025em}}
-.brand{{font-size:1.65rem;font-weight:700}} .muted,.stApp [data-testid="stCaptionContainer"] p{{color:var(--muted)!important}}
-.hero{{background:linear-gradient(135deg,var(--card),#202a39);border:1px solid var(--border);border-radius:24px;padding:clamp(22px,4vw,38px);margin-bottom:1.2rem}}
-.hero-kicker{{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;font-weight:700;margin-bottom:.8rem}}
-.hero-title{{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;color:var(--text)}} .hero-copy{{color:var(--muted);font-size:1rem;line-height:1.75;max-width:720px;margin-top:.7rem}}
-.section-title{{font-size:1.65rem;margin:1.2rem 0 .2rem;color:var(--text)}} .section-subtitle{{color:var(--muted);margin-bottom:1rem;line-height:1.6}}
-.metric{{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:16px;min-height:120px;margin-bottom:.65rem}}
-.metric-head{{display:flex;justify-content:space-between;color:var(--muted);font-weight:600;font-size:.86rem}} .metric-head span{{background:var(--accentbg);padding:5px 9px;border-radius:9px;color:var(--accent)}}
-.metric-value{{font-size:1.9rem;font-weight:700;margin-top:8px;overflow-wrap:anywhere}}
-[data-testid="stVerticalBlockBorderWrapper"]{{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important}}
-.stApp input,.stApp textarea,.stApp [data-baseweb="input"] input,.stApp [data-baseweb="textarea"] textarea{{background:var(--input)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;caret-color:var(--text)!important;border-color:var(--border)!important;opacity:1!important}}
+h1,h2,h3,.brand,.hero-title,.section-title{{font-family:Helvetica,Arial,sans-serif!important;letter-spacing:-.02em;font-weight:700}}
+.stApp p,.stApp li,.stApp label,.stApp [data-testid="stMarkdownContainer"]{{font-size:1rem;line-height:1.6}}
+.brand{{font-size:1.55rem;font-weight:750}} .muted,.stApp [data-testid="stCaptionContainer"] p{{color:var(--muted)!important;font-size:.95rem}}
+.hero{{background:linear-gradient(135deg,var(--card),#202a39);border:1px solid var(--border);border-radius:24px;padding:clamp(22px,4vw,38px);margin-bottom:1.2rem;animation:rise-in .45s ease-out both}}
+.hero-kicker{{color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-size:.82rem;font-weight:700;margin-bottom:.8rem}}
+.hero-title{{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;color:var(--text)}} .hero-copy{{color:var(--muted);font-size:1.08rem;line-height:1.7;max-width:720px;margin-top:.7rem}}
+.section-title{{font-size:1.65rem;margin:1.2rem 0 .2rem;color:var(--text)}} .section-subtitle{{color:var(--muted);font-size:1rem;margin-bottom:1rem;line-height:1.6}}
+.metric{{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:17px;min-height:125px;margin-bottom:.65rem;animation:rise-in .45s ease-out both}}
+.metric-head{{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-weight:600;font-size:.98rem}} .metric-head span{{background:var(--accentbg);padding:5px 9px;border-radius:9px;color:var(--accent)}}
+.metric-value{{font-size:2rem;font-weight:750;margin-top:8px;overflow-wrap:anywhere}}
+[data-testid="stVerticalBlockBorderWrapper"]{{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important;animation:rise-in .32s ease-out both}}
+.stApp input,.stApp textarea,.stApp [data-baseweb="input"] input,.stApp [data-baseweb="textarea"] textarea{{background:var(--input)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;caret-color:var(--text)!important;border-color:var(--border)!important;opacity:1!important;font-size:16px!important;min-height:44px}}
 .stApp input::placeholder,.stApp textarea::placeholder{{color:var(--muted)!important;-webkit-text-fill-color:var(--muted)!important;opacity:1!important}}
-.stApp [data-baseweb="select"]>div,.stApp [data-baseweb="select"] *{{background-color:var(--input);color:var(--text)!important;border-color:var(--border)!important}}
+.stApp [data-baseweb="select"]>div,.stApp [data-baseweb="select"] *{{background-color:var(--input);color:var(--text)!important;border-color:var(--border)!important;font-size:16px!important}}
 [data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]{{background:var(--card)!important;color:var(--text)!important}}
-.stApp .stButton>button,.stApp .stDownloadButton>button{{background:var(--card2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:11px!important;min-height:44px;font-weight:650;white-space:normal}}
-.stApp .stButton>button:hover,.stApp .stDownloadButton>button:hover{{border-color:var(--accent)!important;color:var(--accent)!important}}
-.stApp [data-testid="stFormSubmitButton"] button,.stApp button[kind="primary"]{{background:var(--accent)!important;color:#111722!important;border:1px solid var(--accent)!important;border-radius:11px!important;min-height:46px;font-weight:700}}
+.stApp .stButton>button,.stApp .stDownloadButton>button{{background:var(--card2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:12px!important;min-height:48px;padding:.55rem .85rem;font-size:1rem!important;font-weight:650;white-space:normal;transition:transform .16s ease,border-color .16s ease,background .16s ease}}
+.stApp .stButton>button:hover,.stApp .stDownloadButton>button:hover{{border-color:var(--accent)!important;color:var(--accent)!important;transform:translateY(-1px)}}
+.stApp [data-testid="stFormSubmitButton"] button,.stApp button[kind="primary"]{{background:var(--accent)!important;color:#111722!important;border:1px solid var(--accent)!important;border-radius:12px!important;min-height:50px;font-size:1rem!important;font-weight:750}}
 .stApp [data-testid="stFormSubmitButton"] button *,.stApp button[kind="primary"] *{{color:#111722!important;-webkit-text-fill-color:#111722!important}}
 .stApp hr{{border-color:var(--border)}} a{{color:var(--accent)!important}}
-@media(max-width:760px){{[data-testid="stMainBlockContainer"]{{padding:.8rem .7rem 2rem}}.hero{{border-radius:18px;padding:21px}}.hero-title{{font-size:clamp(1.8rem,8vw,2.5rem)}}.metric{{padding:12px;min-height:105px}}.metric-value{{font-size:1.55rem}}.section-title{{font-size:1.4rem}}.stApp .stButton>button{{min-height:46px}}}}
+/* Small visual feedback for updates, reminders, and completed work */
+@keyframes rise-in{{from{{opacity:0;transform:translateY(7px)}}to{{opacity:1;transform:translateY(0)}}}}
+@keyframes gentle-pulse{{0%,100%{{box-shadow:0 0 0 0 rgba(240,202,134,0)}}50%{{box-shadow:0 0 0 4px rgba(240,202,134,.12)}}}}
+@keyframes done-pop{{0%{{transform:scale(.97)}}60%{{transform:scale(1.015)}}100%{{transform:scale(1)}}}}
+.status-pill{{display:inline-block;border-radius:999px;padding:3px 9px;font-size:.82rem;font-weight:750;margin:2px 4px 2px 0;letter-spacing:.01em}}
+.status-new{{background:#263e32;color:#a8f0c8;border:1px solid #426c55;animation:done-pop .55s ease-out both}}
+.status-overdue{{background:#493322;color:#ffdb9c;border:1px solid #89633b;animation:gentle-pulse 2.2s ease-in-out infinite}}
+.status-done{{background:#263e32;color:#a8f0c8;border:1px solid #426c55;animation:done-pop .35s ease-out both}}
+.stAlert{{border-radius:13px;animation:rise-in .3s ease-out both}}
+@media(max-width:760px){{
+ [data-testid="stMainBlockContainer"]{{padding:.65rem .65rem 1.6rem}}
+ .hero{{border-radius:17px;padding:19px 17px;margin-bottom:.9rem}}
+ .hero-title{{font-size:clamp(1.8rem,8vw,2.35rem)}} .hero-copy{{font-size:1rem;line-height:1.65}}
+ .hero-kicker{{font-size:.78rem}} .section-title{{font-size:1.45rem}}
+ .metric{{padding:12px;min-height:104px;border-radius:14px}}
+ .metric-head{{font-size:.9rem}} .metric-value{{font-size:1.55rem}}
+ .stApp p,.stApp li,.stApp label,.stApp [data-testid="stMarkdownContainer"]{{font-size:16px;line-height:1.55}}
+ .stApp [data-testid="stCaptionContainer"] p{{font-size:14px!important;line-height:1.45}}
+ .stApp .stButton>button,.stApp .stDownloadButton>button{{min-height:50px;font-size:16px!important;padding:.65rem .75rem}}
+ .stApp input,.stApp textarea,.stApp [data-baseweb="input"] input,.stApp [data-baseweb="textarea"] textarea{{font-size:16px!important}}
+ /* Stack content columns on phones so labels and controls stay readable. */
+ [data-testid="stHorizontalBlock"]{{flex-wrap:wrap!important;gap:.6rem!important}}
+ [data-testid="stHorizontalBlock"]>[data-testid="column"]{{flex:1 1 100%!important;min-width:100%!important;width:100%!important}}
+ section[data-testid="stSidebar"]>div{{padding:.9rem .75rem}}
+}}
+@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}}}
 </style>""",unsafe_allow_html=True)
 
 today=date.today(); now=datetime.now()
@@ -223,6 +260,11 @@ elif page=="Tasks & Routines":
                 st.rerun()
             with b:
                 st.markdown(f"~~{safe(x.get('name','Task'))}~~" if x.get("done") else f"**{safe(x.get('name','Task'))}**")
+                badges=[]
+                if x.get("done"): badges.append('<span class="status-pill status-done">✓ Done</span>')
+                elif task_is_overdue(x): badges.append('<span class="status-pill status-overdue">⚠ Overdue</span>')
+                if is_recent(x): badges.append('<span class="status-pill status-new">✦ New</span>')
+                if badges: st.markdown(" ".join(badges),unsafe_allow_html=True)
                 st.caption(f"{x.get('assigned','Both')} · {x.get('priority','Normal')} priority"+(f" · Due {fmt_date(x['due'])}" if x.get("due") else "")+(f" · Repeats {x['repeat'].lower()}" if x.get("repeat") not in (None,"Does not repeat") else ""))
             with c:
                 if st.button("Delete",key="del_task_"+x["id"],use_container_width=True): remove("tasks",x["id"]); st.rerun()
@@ -275,6 +317,8 @@ elif page=="Groceries":
                 st.rerun()
             with b:
                 st.markdown(f"~~{safe(g['name'])}~~" if g.get("bought") else f"**{safe(g['name'])}**")
+                if g.get("bought"): st.markdown('<span class="status-pill status-done">✓ Picked up</span>',unsafe_allow_html=True)
+                elif is_recent(g): st.markdown('<span class="status-pill status-new">✦ New</span>',unsafe_allow_html=True)
                 st.caption(f"{safe(g.get('category','Other'))} · Quantity: {safe(g.get('quantity','As needed'))}")
             with c:
                 if st.button("Remove",key="remove_g_"+g["id"],use_container_width=True): activity("Removed grocery",g["name"]); remove("groceries",g["id"]); st.rerun()
