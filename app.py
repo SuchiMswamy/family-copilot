@@ -96,6 +96,10 @@ h1,h2,h3,.brand,.hero-title,.section-title{{font-family:Helvetica,Arial,sans-ser
 .hero-title{{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;color:var(--text)}} .hero-copy{{color:var(--muted);font-size:1.08rem;line-height:1.7;max-width:720px;margin-top:.7rem}}
 .section-title{{font-size:1.65rem;margin:1.2rem 0 .2rem;color:var(--text)}} .section-subtitle{{color:var(--muted);font-size:1rem;margin-bottom:1rem;line-height:1.6}}
 .metric{{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:17px;min-height:125px;margin-bottom:.65rem;animation:rise-in .45s ease-out both}}
+.home-metric-button{{width:100%;text-align:left;white-space:pre-line!important;display:flex!important;align-items:flex-start!important;justify-content:flex-start!important;flex-direction:column!important;gap:4px!important;background:var(--card)!important;border:1px solid var(--border)!important;border-radius:17px!important;min-height:160px!important;padding:16px!important;box-shadow:none!important;animation:rise-in .45s ease-out both}}
+.home-metric-button:hover{{background:var(--card2)!important;border-color:var(--accent)!important;transform:translateY(-2px)}}
+.home-metric-button p{{margin:0!important;line-height:1.35!important;white-space:pre-line!important}}
+.home-metric-button [data-testid="stMarkdownContainer"]{{white-space:pre-line!important}}
 .metric-head{{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-weight:600;font-size:.98rem}} .metric-head span{{background:var(--accentbg);padding:5px 9px;border-radius:9px;color:var(--accent)}}
 .metric-value{{font-size:2rem;font-weight:750;margin-top:8px;overflow-wrap:anywhere}}
 [data-testid="stVerticalBlockBorderWrapper"]{{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important;animation:rise-in .32s ease-out both}}
@@ -124,6 +128,7 @@ h1,h2,h3,.brand,.hero-title,.section-title{{font-family:Helvetica,Arial,sans-ser
  .hero-kicker{{font-size:.78rem}} .section-title{{font-size:1.45rem}}
  .metric{{padding:12px;min-height:104px;border-radius:14px}}
  .metric-head{{font-size:.9rem}} .metric-value{{font-size:1.55rem}}
+ .home-metric-button{{min-height:150px!important;padding:13px!important;border-radius:14px!important}}
  .stApp p,.stApp li,.stApp label,.stApp [data-testid="stMarkdownContainer"]{{font-size:16px;line-height:1.55}}
  .stApp [data-testid="stCaptionContainer"] p{{font-size:14px!important;line-height:1.45}}
  .stApp .stButton>button,.stApp .stDownloadButton>button{{min-height:50px;font-size:16px!important;padding:.65rem .75rem}}
@@ -172,8 +177,18 @@ if page=="Home":
     month= today.strftime("%Y-%m")
     spent=sum(float(x.get("amount",0) or 0) for x in tx if x.get("kind")=="Expense" and str(x.get("date",""))[:7]==month)
     cols=st.columns(4)
-    for c,args in zip(cols,[("Open tasks",pending,"Little steps to take","✓"),("Shopping list",left,"Items still to pick up","🛒"),("Coming up",upcoming,"Upcoming events","▦"),("Monthly spend",f"€{spent:,.2f}","Recorded expenses","€")]):
-        with c: metric(*args)
+    cards=[
+        ("Open tasks",pending,"Little steps to take","✓","Tasks & Routines"),
+        ("Shopping list",left,"Items still to pick up","🛒","Groceries"),
+        ("Coming up",upcoming,"Upcoming events","▦","Calendar & Reminders"),
+        ("Monthly spend",f"€{spent:,.2f}","Recorded expenses","€","Household Budget"),
+    ]
+    for i,(c,args) in enumerate(zip(cols,cards)):
+        label,value,detail,icon,target=args
+        with c:
+            # The full summary card is one large button, so the whole surface is tappable.
+            card_label=f"{label} {icon}\n\n{value}\n{detail}\n\nTap to open →"
+            if st.button(card_label,key=f"home_metric_{i}",use_container_width=True): go(target)
     greet="Good morning" if now.hour<12 else ("Good afternoon" if now.hour<18 else "Good evening")
     st.markdown(f"### {greet}, Suchi & Abi 💙")
     mood_options=["Happy","Relaxed","Grateful","Busy","Tired","Need a little love"]
@@ -186,8 +201,8 @@ if page=="Home":
     if due or today_events: st.warning(f"Reminder: {len(due)} task(s) due/overdue · {len(today_events)} event(s) today")
     else: st.success("You're all caught up on today's reminders. Make a little room to breathe.")
     with st.container(border=True):
-        st.markdown("### 🍳 What's in your fridge?")
-        st.write("Turn the ingredients you already have into easy meal ideas, then send anything missing to your shared grocery list.")
+        st.markdown("### 🍳 What's in My Fridge?")
+        st.write("Find meals using ingredients you already have, then add anything missing to your shared grocery list.")
         if st.button("Find something to cook →", key="home_fridge_finder", use_container_width=True): go("What's in My Fridge?")
     section("Quick actions","Add something in just a tap.")
     q=st.columns(4)
