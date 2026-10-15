@@ -9,7 +9,7 @@ st.set_page_config(page_title="Our Family Hub", page_icon="🏡", layout="wide",
 DATA_DIR = Path(os.environ.get("FAMILY_HUB_DATA_DIR", ".")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "family_hub.sqlite3"
-COLLECTIONS = ["tasks", "routines", "groceries", "events", "notes", "memories", "transactions", "activity"]
+COLLECTIONS = ["tasks", "routines", "groceries", "events", "notes", "memories", "transactions", "activity", "pantry"]
 DARK = {"bg":"#111318","sidebar":"#171a21","card":"#1c2029","card2":"#242b37","text":"#f4f6fa","muted":"#b6bfce","border":"#343c4a","accent":"#a9c8f0","accent_bg":"#29384c","input":"#171b23","good":"#8ed7b1","warn":"#f0ca86"}
 
 def stamp(): return datetime.now().isoformat(timespec="seconds")
@@ -100,8 +100,8 @@ h1,h2,h3,.brand,.hero-title,.section-title{{font-family:'Playfair Display',Georg
 </style>""",unsafe_allow_html=True)
 
 today=date.today(); now=datetime.now()
-pages=["Home","Tasks & Routines","Groceries","Calendar & Reminders","Family Notes","Memories","Household Budget","Activity & Greetings","Backups & Settings"]
-labels={"Home":"🏡 Home","Tasks & Routines":"✓ Tasks & routines","Groceries":"🛒 Groceries","Calendar & Reminders":"▦ Calendar & reminders","Family Notes":"♡ Family notes","Memories":"✦ Memories timeline","Household Budget":"€ Household budget","Activity & Greetings":"☀ Greetings & activity","Backups & Settings":"⚙ Backups & settings"}
+pages=["Home","Tasks & Routines","Groceries","What's in My Fridge?","Calendar & Reminders","Family Notes","Memories","Household Budget","Activity & Greetings","Backups & Settings"]
+labels={"Home":"🏡 Home","Tasks & Routines":"✓ Tasks & routines","Groceries":"🛒 Groceries","What's in My Fridge?":"🍳 What's in my fridge?","Calendar & Reminders":"▦ Calendar & reminders","Family Notes":"♡ Family notes","Memories":"✦ Memories timeline","Household Budget":"€ Household budget","Activity & Greetings":"☀ Greetings & activity","Backups & Settings":"⚙ Backups & settings"}
 
 # Initialise app-level navigation separately from the radio widget's state.
 if "current_page" not in st.session_state:
@@ -148,6 +148,10 @@ if page=="Home":
     today_events=[x for x in events if x.get("date") and as_date(x["date"])==today]
     if due or today_events: st.warning(f"Reminder: {len(due)} task(s) due/overdue · {len(today_events)} event(s) today")
     else: st.success("You're all caught up on today's reminders. Make a little room to breathe.")
+    with st.container(border=True):
+        st.markdown("### 🍳 What's in your fridge?")
+        st.write("Turn the ingredients you already have into easy meal ideas, then send anything missing to your shared grocery list.")
+        if st.button("Find something to cook →", key="home_fridge_finder", use_container_width=True): go("What's in My Fridge?")
     section("Quick actions","Add something in just a tap.")
     q=st.columns(4)
     for c,label,target in zip(q,["＋ Add task","🛒 Add groceries","📅 Add event","♡ Write a note"],["Tasks & Routines","Groceries","Calendar & Reminders","Family Notes"]):
@@ -283,6 +287,116 @@ elif page=="Groceries":
         if st.button("Clear purchased items",use_container_width=True):
             for g in bought: remove("groceries",g["id"])
             st.rerun()
+
+elif page=="What's in My Fridge?":
+    section("What's in My Fridge?", "Tell us what you have, and discover meals you can make without another shopping trip.")
+    st.markdown("### 🥕 What's in your fridge, freezer, or cupboards?")
+    saved_pantry=get("pantry")
+    saved_names=[x.get("name","").strip() for x in saved_pantry if x.get("name","").strip()]
+    if saved_names:
+        st.caption("Saved pantry items: " + " · ".join(saved_names))
+    with st.form("fridge_recipe_form"):
+        ingredients_text=st.text_area("List your ingredients", placeholder="eggs, spinach, tomatoes, cheese, leftover rice", height=110, help="Separate ingredients with commas or put each on a new line.")
+        a,b=st.columns(2)
+        with a: max_time=st.selectbox("Cooking time", ["Any time", "15 minutes or less", "30 minutes or less", "45 minutes or less"])
+        with b: diet=st.selectbox("Preference", ["Anything", "Vegetarian", "Vegan"])
+        include_pantry=st.checkbox("Include my saved pantry items", value=True)
+        find_recipes=st.form_submit_button("✨ Find recipes", use_container_width=True)
+    # A built-in recipe collection works without an API key. Matching is based on
+    # ingredients and clearly identifies missing items rather than claiming AI certainty.
+    recipe_book=[
+      {"name":"Spinach & cheese omelette","time":15,"diet":"Vegetarian","ingredients":["eggs","spinach","cheese","milk","butter"],"steps":["Whisk eggs with a splash of milk, salt and pepper.","Wilt spinach in a lightly buttered pan.","Pour in eggs, cook gently, add cheese, fold and serve."],"tip":"Use any leafy greens in place of spinach."},
+      {"name":"Tomato & cheese toasties","time":15,"diet":"Vegetarian","ingredients":["bread","tomatoes","cheese","butter"],"steps":["Slice tomatoes and grate or slice the cheese.","Layer on bread and butter the outside lightly.","Toast in a pan or sandwich press until golden and melted."],"tip":"Add spinach or herbs if you have them."},
+      {"name":"Creamy tomato spinach pasta","time":25,"diet":"Vegetarian","ingredients":["pasta","tomatoes","spinach","garlic","cream","cheese","olive oil"],"steps":["Cook pasta according to its packet.","Sauté garlic and tomatoes in olive oil; stir in spinach and cream.","Toss with pasta and finish with cheese."],"tip":"Milk plus a little extra cheese can stand in for cream."},
+      {"name":"Vegetable fried rice","time":20,"diet":"Vegan","ingredients":["cooked rice","eggs","carrots","peas","spring onions","soy sauce","oil"],"steps":["Use cold cooked rice if possible; break up any clumps.","Stir-fry chopped vegetables in a little oil.","Add rice and soy sauce; stir-fry until hot. Add scrambled egg if using."],"tip":"For vegan fried rice, leave out the egg."},
+      {"name":"Chickpea tomato curry","time":30,"diet":"Vegan","ingredients":["chickpeas","canned tomatoes","onion","garlic","curry powder","oil","rice"],"steps":["Cook chopped onion and garlic in oil until soft.","Stir in curry powder, chickpeas and canned tomatoes.","Simmer for 15–20 minutes and serve with rice."],"tip":"Use any beans instead of chickpeas."},
+      {"name":"Cheesy baked potatoes","time":45,"diet":"Vegetarian","ingredients":["potatoes","cheese","butter","yogurt","spring onions"],"steps":["Prick potatoes and bake at 200°C until tender.","Split open and fluff the insides with butter.","Top with cheese and return to the oven until melted; add yogurt or spring onions."],"tip":"Microwave the potatoes first to reduce oven time."},
+      {"name":"Banana oat pancakes","time":20,"diet":"Vegetarian","ingredients":["banana","eggs","oats","milk","oil"],"steps":["Mash banana and mix with eggs, oats and a splash of milk.","Rest the batter for five minutes.","Cook small pancakes in a lightly oiled pan until golden on both sides."],"tip":"Add cinnamon if available."},
+      {"name":"Garlic butter mushrooms on toast","time":15,"diet":"Vegetarian","ingredients":["mushrooms","garlic","butter","bread","parsley"],"steps":["Slice mushrooms and mince garlic.","Sauté mushrooms in butter until browned; add garlic near the end.","Season and spoon over toasted bread; finish with parsley if available."],"tip":"A splash of soy sauce adds savoury flavour."},
+      {"name":"Simple lentil soup","time":35,"diet":"Vegan","ingredients":["lentils","carrots","onion","garlic","vegetable stock","canned tomatoes"],"steps":["Soften chopped onion, carrot and garlic in a pot.","Add lentils, stock and tomatoes.","Simmer until lentils are tender, adding water if needed."],"tip":"Use any suitable stock or water with seasoning."},
+      {"name":"Tomato egg rice bowl","time":15,"diet":"Vegetarian","ingredients":["eggs","tomatoes","cooked rice","oil","spring onions"],"steps":["Scramble eggs gently in a pan and set aside.","Cook chopped tomatoes until juicy and soft.","Return eggs to the pan and serve over hot rice."],"tip":"Season with soy sauce, salt or pepper to taste."},
+    ]
+    def norm_ingredient(value):
+        value=value.lower().strip()
+        for prefix in ("some ","fresh ","frozen ","leftover ","a little ","a few "):
+            if value.startswith(prefix): value=value[len(prefix):]
+        aliases={"tomato":"tomatoes","potato":"potatoes","egg":"eggs","mushroom":"mushrooms","chickpea":"chickpeas","green onion":"spring onions","scallions":"spring onions","rice":"cooked rice","oat":"oats","lentil":"lentils"}
+        return aliases.get(value,value)
+    if find_recipes:
+        supplied=[norm_ingredient(v) for v in ingredients_text.replace("\n",",").split(",") if v.strip()]
+        if include_pantry: supplied += [norm_ingredient(v) for v in saved_names]
+        # Treat already listed grocery items as available too.
+        supplied += [norm_ingredient(x.get("name","")) for x in get("groceries") if not x.get("bought")]
+        available=set(supplied)
+        st.session_state["fridge_available"] = sorted(available)
+        matches=[]
+        max_minutes={"Any time":999,"15 minutes or less":15,"30 minutes or less":30,"45 minutes or less":45}[max_time]
+        for recipe in recipe_book:
+            if recipe["time"]>max_minutes or (diet!="Anything" and recipe["diet"] not in (diet,"Vegan" if diet=="Vegetarian" else diet)): continue
+            have=[i for i in recipe["ingredients"] if norm_ingredient(i) in available or (i=="cooked rice" and "rice" in available) or (i=="canned tomatoes" and "tomatoes" in available)]
+            missing=[i for i in recipe["ingredients"] if i not in have]
+            if have:
+                matches.append((len(have)/len(recipe["ingredients"]),len(missing),recipe,have,missing))
+        st.session_state["fridge_recipe_results"]=[{"score":x[0],"missing":x[4],"recipe":x[2],"have":x[3]} for x in sorted(matches,key=lambda x:(x[1],-x[0],x[2]["time"]))[:8]]
+        if not supplied: st.session_state["fridge_recipe_results"]=[]
+    results=st.session_state.get("fridge_recipe_results",[])
+    if find_recipes and not ingredients_text.strip() and not (include_pantry and saved_names):
+        st.info("Enter a few ingredients first so I can find matching recipes.")
+    elif results:
+        st.markdown("### 🍽️ Recipes you could make")
+        st.caption("Matches use a built-in recipe collection. Check ingredient labels and quantities before cooking.")
+        for idx,item in enumerate(results):
+            r=item["recipe"]; missing=item["missing"]
+            with st.container(border=True):
+                a,b=st.columns([.76,.24])
+                with a:
+                    st.markdown(f"### {r['name']}")
+                    st.caption(f"⏱️ {r['time']} min · {r['diet']} · {len(item['have'])}/{len(r['ingredients'])} ingredients matched")
+                    st.progress(item["score"])
+                with b:
+                    st.metric("Need to buy",len(missing))
+                st.markdown("**You have:** " + (", ".join(item["have"]) if item["have"] else "No listed ingredients matched"))
+                st.markdown("**Missing:** " + (", ".join(missing) if missing else "Nothing from this recipe list — lovely!") )
+                with st.expander("View ingredients & cooking steps"):
+                    st.markdown("**Ingredients**")
+                    st.write(", ".join(r["ingredients"]))
+                    st.markdown("**How to make it**")
+                    for n,step in enumerate(r["steps"],1): st.write(f"{n}. {step}")
+                    st.caption("Tip: "+r["tip"])
+                if missing:
+                    if st.button("🛒 Add missing ingredients to Groceries",key=f"recipe_missing_{idx}",use_container_width=True):
+                        existing={g.get("name","").casefold() for g in get("groceries") if not g.get("bought")}
+                        added=[]
+                        for ingredient in missing:
+                            if ingredient.casefold() not in existing:
+                                add("groceries",{"name":ingredient.title(),"quantity":"For recipe: "+r["name"],"category":"Produce" if ingredient in ["tomatoes","spinach","carrots","onion","garlic","mushrooms"] else ("Dairy & eggs" if ingredient in ["eggs","cheese","milk","cream","butter","yogurt"] else "Pantry"),"bought":False}); added.append(ingredient)
+                        activity("Added recipe ingredients",r["name"])
+                        st.success("Added: "+(", ".join(added) if added else "All missing items were already on your list."))
+                        st.rerun()
+    elif find_recipes:
+        st.info("I couldn't find a close match yet. Try adding a few more ingredients, or choose a longer cooking time.")
+    st.divider()
+    section("Save pantry staples", "Keep ingredients you usually have at home, so recipe matching is faster next time.")
+    with st.form("pantry_form",clear_on_submit=True):
+        pantry_text=st.text_input("Add pantry items",placeholder="olive oil, pasta, rice, flour, salt")
+        if st.form_submit_button("Save pantry items",use_container_width=True):
+            existing={x.get("name","").casefold() for x in get("pantry")}
+            added=0
+            for value in pantry_text.split(","):
+                name=value.strip()
+                if name and name.casefold() not in existing:
+                    add("pantry",{"name":name}); existing.add(name.casefold()); added+=1
+            if added: st.success(f"Saved {added} pantry item(s).")
+            else: st.info("No new pantry items to save.")
+            st.rerun()
+    if saved_pantry:
+        with st.expander("Manage saved pantry items"):
+            for item in saved_pantry:
+                a,b=st.columns([.8,.2])
+                with a: st.write("🥫 "+item.get("name",""))
+                with b:
+                    if st.button("Remove",key="remove_pantry_"+item["id"]): remove("pantry",item["id"]); st.rerun()
+    st.info("This version uses built-in recipes and ingredient matching, so it works without an AI key or internet recipe service. Recipe suggestions are a starting point; confirm quantities, allergies, and food safety before cooking.")
 
 elif page=="Calendar & Reminders":
     section("Calendar & reminders","Shared plans, important dates, and gentle reminders.")
