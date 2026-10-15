@@ -1,1135 +1,432 @@
-
-import html
-import textwrap
-from datetime import date, datetime
+from __future__ import annotations
+import json, os, sqlite3, uuid, csv, io, html
+from pathlib import Path
+from datetime import date, datetime, time, timedelta
 import streamlit as st
 
-# =========================================================
-# CONFIGURATION
-# =========================================================
-st.set_page_config(
-    page_title="Our Family Hub | Suchi & Abi",
-    page_icon="🏡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# =========================================================
-# THEMES
-# =========================================================
-THEMES = {
-    "Dark": {
-        "bg": "#15171B",
-        "sidebar": "#1C1F24",
-        "card": "#20242A",
-        "text": "#F2F3F5",
-        "muted": "#B4BBC6",
-        "border": "#373D46",
-        "accent": "#B5CDE9",
-        "accent_soft": "#303D4B",
-        "input": "#252A31",
-        "shadow": "0 4px 20px rgba(0, 0, 0, 0.12)",
-    },
-}
-# =========================================================
-# SESSION STATE
-# =========================================================
-DEFAULTS = {
-    "theme": "Dark",
-    "tasks": [],
-    "groceries": [],
-    "appointments": [],
-    "notes": [],
-    "shopping_history": [],
-    "mood": "Happy",
-    "task_filter": "All",
-}
-
-for key, value in DEFAULTS.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
-
-C = THEMES["Dark"]
-
-
-# =========================================================
-# UTILITIES
-# =========================================================
-def safe(value):
-    """Escape user-entered text before displaying it in HTML."""
-    return html.escape(str(value))
-
-
-def pretty_date(value):
-    if isinstance(value, (date, datetime)):
-        return value.strftime("%d %b %Y")
-    return str(value)
-
-
-def record_history(action, item):
-    st.session_state.shopping_history.append({
-        "action": action,
-        "item": item,
-        "date": datetime.now().strftime("%d %b %Y · %H:%M"),
-    })
-
-
-def card(title, description="", icon="✨", eyebrow=None):
-    """Reusable information card rendered with native Streamlit elements.
-
-    Using native widgets here avoids HTML being displayed as literal code
-    when Markdown indentation or Streamlit rendering behavior changes.
-    """
-    with st.container(border=True):
-        if eyebrow:
-            st.caption(str(eyebrow).upper())
-        st.markdown(f"### {safe(icon)}  {safe(title)}")
-        if description:
-            st.write(description)
-
-
-def metric_card(label, value, icon, detail):
-    st.markdown(
-        textwrap.dedent(f"""
-        <div class="metric-card">
-            <div class="metric-top">
-                <span>{safe(label)}</span>
-                <span class="metric-icon">{safe(icon)}</span>
-            </div>
-            <div class="metric-value">{safe(value)}</div>
-            <div class="metric-detail">{safe(detail)}</div>
-        </div>
-        """),
-        unsafe_allow_html=True,
-    )
-
-
-def section_title(title, subtitle=None):
-    st.markdown(f'<div class="section-title">{safe(title)}</div>',
-                unsafe_allow_html=True)
-    if subtitle:
-        st.markdown(
-            f'<div class="section-subtitle">{safe(subtitle)}</div>',
-            unsafe_allow_html=True,
-        )
-
-
-# =========================================================
-# GLOBAL PREMIUM STYLING
-# =========================================================
-st.markdown(
-    textwrap.dedent(f"""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
-
-    :root {{
-        --bg: {C["bg"]};
-        --sidebar: {C["sidebar"]};
-        --card: {C["card"]};
-        --text: {C["text"]};
-        --muted: {C["muted"]};
-        --border: {C["border"]};
-        --accent: {C["accent"]};
-        --accent-soft: {C["accent_soft"]};
-        --input: {C["input"]};
-    }}
-
-    html, body, [class*="css"] {{
-        font-family: 'DM Sans', sans-serif;
-    }}
-
-    .stApp {{
-        background: var(--bg);
-        color: var(--text);
-    }}
-
-    [data-testid="stHeader"] {{
-        background: transparent;
-    }}
-
-    [data-testid="stMainBlockContainer"] {{
-        max-width: 1450px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }}
-
-    section[data-testid="stSidebar"] {{
-        background: var(--sidebar);
-        border-right: 1px solid var(--border);
-    }}
-
-    section[data-testid="stSidebar"] > div {{
-        padding-top: 1.8rem;
-    }}
-
-    .stApp p,
-    .stApp label,
-    .stApp li,
-    .stApp h1,
-    .stApp h2,
-    .stApp h3,
-    .stApp h4,
-    .stApp [data-testid="stMarkdownContainer"],
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] label {{
-        color: var(--text);
-    }}
-
-    h1, h2, h3 {{
-        letter-spacing: -0.035em;
-    }}
-
-    h1, .brand-title {{
-        font-family: 'Playfair Display', Georgia, serif !important;
-    }}
-
-    .brand-title {{
-        font-size: 1.75rem;
-        font-weight: 600;
-        color: var(--text);
-        line-height: 1.2;
-    }}
-
-    .brand-subtitle {{
-        font-size: 0.84rem;
-        color: var(--muted);
-        margin-top: 0.35rem;
-        line-height: 1.5;
-    }}
-
-    .sidebar-label {{
-        color: var(--muted);
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        margin: 1.5rem 0 0.5rem 0;
-    }}
-
-    .hero {{
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        padding: clamp(22px, 4vw, 38px);
-        box-shadow: {C["shadow"]};
-        margin-bottom: 1.35rem;
-    }}
-
-    .hero-kicker {{
-        color: var(--accent);
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        font-size: 0.72rem;
-        font-weight: 700;
-        margin-bottom: 0.8rem;
-    }}
-
-    .hero-title {{
-        font-family: 'Playfair Display', Georgia, serif;
-        font-size: clamp(2rem, 4vw, 3.1rem);
-        line-height: 1.15;
-        letter-spacing: -0.045em;
-        color: var(--text);
-        margin: 0;
-    }}
-
-    .hero-copy {{
-        color: var(--muted);
-        font-size: 1rem;
-        margin-top: 0.8rem;
-        line-height: 1.8;
-        max-width: 650px;
-    }}
-
-    .hero-footer {{
-        color: var(--muted);
-        font-size: 0.82rem;
-        margin-top: 1.2rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border);
-    }}
-
-    .section-title {{
-        font-family: 'Playfair Display', Georgia, serif;
-        color: var(--text);
-        font-size: 1.55rem;
-        font-weight: 600;
-        letter-spacing: -0.025em;
-        margin: 1.25rem 0 0.25rem 0;
-    }}
-
-    .section-subtitle {{
-        color: var(--muted);
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-        line-height: 1.65;
-    }}
-
-    .metric-card {{
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 19px;
-        min-height: 142px;
-        box-shadow: {C["shadow"]};
-        margin-bottom: 0.7rem;
-    }}
-
-    .metric-top {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        color: var(--muted);
-        font-size: 0.85rem;
-        font-weight: 500;
-    }}
-
-    .metric-icon {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 11px;
-        background: var(--accent-soft);
-        font-size: 1.05rem;
-    }}
-
-    .metric-value {{
-        font-size: 2rem;
-        font-weight: 700;
-        letter-spacing: -0.04em;
-        margin-top: 12px;
-        color: var(--text);
-    }}
-
-    .metric-detail {{
-        color: var(--muted);
-        font-size: 0.78rem;
-        margin-top: 3px;
-    }}
-
-    .premium-card {{
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 20px;
-        box-shadow: {C["shadow"]};
-        margin-bottom: 0.75rem;
-    }}
-
-    .eyebrow {{
-        color: var(--accent);
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.13em;
-        font-weight: 700;
-        margin-bottom: 0.65rem;
-    }}
-
-    .card-heading {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: var(--text);
-        font-size: 1.05rem;
-        font-weight: 700;
-        margin-bottom: 0.6rem;
-    }}
-
-    .card-icon {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 35px;
-        height: 35px;
-        border-radius: 11px;
-        background: var(--accent-soft);
-        flex-shrink: 0;
-    }}
-
-    .card-description {{
-        color: var(--muted);
-        font-size: 0.88rem;
-        line-height: 1.7;
-        overflow-wrap: anywhere;
-    }}
-
-    [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: var(--card);
-        border-color: var(--border);
-        border-radius: 16px;
-        box-shadow: {C["shadow"]};
-    }}
-
-    [data-testid="stExpander"] {{
-        background: var(--card);
-        border-color: var(--border);
-        border-radius: 14px;
-    }}
-
-    .stApp input,
-    .stApp textarea,
-    .stApp [data-baseweb="select"] > div {{
-        background-color: var(--input);
-        color: var(--text);
-        border-color: var(--border);
-        border-radius: 10px;
-    }}
-
-    .stApp [data-baseweb="select"] * {{
-        color: var(--text);
-    }}
-
-    [data-baseweb="popover"],
-    [data-baseweb="menu"],
-    [role="listbox"] {{
-        background-color: var(--card);
-        color: var(--text);
-    }}
-
-    .stApp .stButton > button,
-    .stApp .stDownloadButton > button {{
-        background: var(--card);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: 11px;
-        min-height: 42px;
-        font-weight: 600;
-        transition: border-color 0.15s ease;
-    }}
-
-    .stApp .stButton > button:hover,
-    .stApp .stDownloadButton > button:hover {{
-        border-color: var(--accent);
-        color: var(--accent);
-    }}
-
-    .stApp [data-testid="stCaptionContainer"] p,
-    .stApp small {{
-        color: var(--muted);
-    }}
-
-    .stApp hr {{
-        border-color: var(--border);
-        margin: 1.5rem 0;
-    }}
-
-    [data-testid="stAlert"] {{
-        border-radius: 12px;
-    }}
-
-    div[data-testid="stMetric"] {{
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 15px;
-    }}
-
-    div[data-testid="stMetric"] label,
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
-        color: var(--text);
-    }}
-
-    a {{
-        color: var(--accent);
-    }}
-
-
-    /* Native Streamlit shortcut cards */
-    [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: var(--card) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 18px !important;
-        box-shadow: {C["shadow"]};
-        padding: 0.25rem;
-    }}
-
-    /* Strong overrides for Streamlit/BaseWeb controls in light themes */
-    .stApp [data-testid="stExpander"] details,
-    .stApp [data-testid="stExpander"] summary,
-    .stApp [data-testid="stExpander"] [data-testid="stExpanderToggleIcon"],
-    .stApp [data-testid="stExpander"] details > summary {{
-        background: var(--card) !important;
-        color: var(--text) !important;
-        border-color: var(--border) !important;
-    }}
-
-    .stApp [data-testid="stExpander"] summary *,
-    .stApp [data-testid="stExpander"] summary p,
-    .stApp [data-testid="stExpander"] summary span {{
-        color: var(--text) !important;
-        opacity: 1 !important;
-    }}
-
-    .stApp [data-testid="stExpander"] > details > div,
-    .stApp [data-testid="stExpander"] [data-testid="stExpanderDetails"],
-    .stApp [data-testid="stForm"],
-    .stApp [data-testid="stVerticalBlockBorderWrapper"] {{
-        background-color: var(--card) !important;
-        color: var(--text) !important;
-        border-color: var(--border) !important;
-    }}
-
-    .stApp input,
-    .stApp textarea,
-    .stApp [data-baseweb="input"] input,
-    .stApp [data-baseweb="textarea"] textarea {{
-        background-color: var(--input) !important;
-        color: var(--text) !important;
-        -webkit-text-fill-color: var(--text) !important;
-        caret-color: var(--text) !important;
-        border-color: var(--border) !important;
-        opacity: 1 !important;
-    }}
-
-    .stApp input::placeholder,
-    .stApp textarea::placeholder,
-    .stApp [data-baseweb="input"] input::placeholder,
-    .stApp [data-baseweb="textarea"] textarea::placeholder {{
-        color: var(--muted) !important;
-        -webkit-text-fill-color: var(--muted) !important;
-        opacity: 1 !important;
-    }}
-
-    .stApp [data-baseweb="input"] > div,
-    .stApp [data-baseweb="textarea"] > div {{
-        background-color: var(--input) !important;
-        border-color: var(--border) !important;
-    }}
-
-    .stApp [data-testid="stFormSubmitButton"] button,
-    .stApp [data-testid="stForm"] button[kind="primary"],
-    .stApp button[kind="primary"] {{
-        background: var(--accent) !important;
-        color: #FFFFFF !important;
-        border: 1px solid var(--accent) !important;
-        opacity: 1 !important;
-        box-shadow: none !important;
-    }}
-
-    .stApp [data-testid="stFormSubmitButton"] button *,
-    .stApp button[kind="primary"] * {{
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-    }}
-
-    .stApp .stButton > button,
-    .stApp .stDownloadButton > button {{
-        background: var(--card) !important;
-        color: var(--text) !important;
-        border-color: var(--border) !important;
-        opacity: 1 !important;
-    }}
-
-    .stApp label,
-    .stApp [data-testid="stWidgetLabel"] *,
-    .stApp [data-testid="stMarkdownContainer"] p,
-    .stApp [data-testid="stMarkdownContainer"] span {{
-        color: var(--text);
-    }}
-
-    /* Readable contrast, resilient cards, and touch-friendly controls */
-    .card-heading, .card-description, .metric-value, .metric-detail,
-    .hero-title, .hero-copy, .section-title, .section-subtitle,
-    .brand-title, .brand-subtitle, .eyebrow {{
-        overflow-wrap: anywhere;
-        word-break: normal;
-    }}
-
-    .card-description, .metric-detail, .hero-copy, .section-subtitle,
-    .brand-subtitle, .stApp [data-testid="stCaptionContainer"] p {{
-        color: var(--muted) !important;
-    }}
-
-    .card-heading, .metric-value, .hero-title, .section-title,
-    .brand-title {{
-        color: var(--text) !important;
-    }}
-
-    .stApp input, .stApp textarea,
-    .stApp [data-baseweb="select"] > div {{
-        min-height: 44px;
-        font-size: 0.98rem;
-    }}
-
-    .stApp .stButton > button,
-    .stApp .stDownloadButton > button,
-    .stApp [data-testid="stFormSubmitButton"] > button {{
-        min-height: 46px;
-        padding: 0.55rem 1rem;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }}
-
-    .premium-card, .metric-card {{
-        min-width: 0;
-        overflow: hidden;
-    }}
-
-    [data-testid="stMarkdownContainer"] pre,
-    [data-testid="stMarkdownContainer"] code {{
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-    }}
-
-    @media (max-width: 700px) {{
-        [data-testid="stMainBlockContainer"] {{
-            padding-top: 1rem;
-        }}
-
-        .hero {{
-            border-radius: 18px;
-            padding: 22px;
-        }}
-
-        .metric-card {{
-            padding: 14px;
-            min-height: 120px;
-        }}
-
-        .card-heading {{
-            font-size: 1rem;
-            align-items: flex-start;
-        }}
-
-        .card-icon {{
-            width: 32px;
-            height: 32px;
-        }}
-
-        .section-title {{
-            font-size: 1.35rem;
-        }}
-
-        .hero-title {{
-            font-size: clamp(1.8rem, 8vw, 2.5rem);
-        }}
-
-        .stApp [data-testid="stMainBlockContainer"] {{
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }}
-    }}
-    </style>
-    """),
-    unsafe_allow_html=True,
-)
-
-# =========================================================
-# SIDEBAR
-# =========================================================
+st.set_page_config(page_title="Our Family Hub", page_icon="🏡", layout="wide", initial_sidebar_state="expanded")
+
+DATA_DIR = Path(os.environ.get("FAMILY_HUB_DATA_DIR", ".")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "family_hub.sqlite3"
+COLLECTIONS = ["tasks", "routines", "groceries", "events", "notes", "memories", "transactions", "activity"]
+DARK = {"bg":"#111318","sidebar":"#171a21","card":"#1c2029","card2":"#242b37","text":"#f4f6fa","muted":"#b6bfce","border":"#343c4a","accent":"#a9c8f0","accent_bg":"#29384c","input":"#171b23","good":"#8ed7b1","warn":"#f0ca86"}
+
+def stamp(): return datetime.now().isoformat(timespec="seconds")
+def new_id(): return uuid.uuid4().hex
+def connect():
+    c=sqlite3.connect(DB_PATH, timeout=20, check_same_thread=False)
+    c.row_factory=sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    return c
+def init_db():
+    with connect() as c:
+        c.execute("CREATE TABLE IF NOT EXISTS data (name TEXT PRIMARY KEY, payload TEXT NOT NULL, updated TEXT NOT NULL)")
+        c.execute("CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        for n in COLLECTIONS: c.execute("INSERT OR IGNORE INTO data VALUES (?,?,?)",(n,"[]",stamp()))
+        c.execute("INSERT OR IGNORE INTO settings VALUES ('mood','Happy')")
+def get(n):
+    with connect() as c: row=c.execute("SELECT payload FROM data WHERE name=?",(n,)).fetchone()
+    try:
+        v=json.loads(row["payload"]) if row else []
+        return v if isinstance(v,list) else []
+    except (ValueError,TypeError): return []
+def put(n, items):
+    with connect() as c: c.execute("INSERT INTO data VALUES (?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,updated=excluded.updated",(n,json.dumps(items,ensure_ascii=False,default=str),stamp()))
+def add(n,item):
+    item.setdefault("id",new_id()); item.setdefault("created_at",stamp()); items=get(n); items.append(item); put(n,items)
+def edit(n, ident, **changes):
+    items=get(n)
+    for x in items:
+        if x.get("id")==ident: x.update(changes); x["updated_at"]=stamp()
+    put(n,items)
+def remove(n, ident): put(n,[x for x in get(n) if x.get("id")!=ident])
+def setting(k,default=""):
+    with connect() as c: row=c.execute("SELECT value FROM settings WHERE name=?",(k,)).fetchone()
+    return row["value"] if row else default
+def set_setting(k,v):
+    with connect() as c: c.execute("INSERT INTO settings VALUES (?,?) ON CONFLICT(name) DO UPDATE SET value=excluded.value",(k,str(v)))
+def as_date(v):
+    try: return date.fromisoformat(str(v)[:10])
+    except (ValueError,TypeError): return date.today()
+def fmt_date(v): return as_date(v).strftime("%a, %d %b %Y")
+def safe(v): return html.escape(str(v if v is not None else ""))
+def section(title,sub=""):
+    st.markdown(f'<div class="section-title">{safe(title)}</div>',unsafe_allow_html=True)
+    if sub: st.markdown(f'<div class="section-subtitle">{safe(sub)}</div>',unsafe_allow_html=True)
+def metric(label,value,detail,icon):
+    st.markdown(f'<div class="metric"><div class="metric-head">{safe(label)} <span>{safe(icon)}</span></div><div class="metric-value">{safe(value)}</div><div class="muted">{safe(detail)}</div></div>',unsafe_allow_html=True)
+def go(page):
+    st.session_state["page"]=page
+    st.rerun()
+def activity(action,item):
+    add("activity",{"action":action,"item":item,"when":stamp()})
+
+init_db()
+st.markdown(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+:root{{--bg:{DARK['bg']};--side:{DARK['sidebar']};--card:{DARK['card']};--card2:{DARK['card2']};--text:{DARK['text']};--muted:{DARK['muted']};--border:{DARK['border']};--accent:{DARK['accent']};--accentbg:{DARK['accent_bg']};--input:{DARK['input']};}}
+html,body,[class*="css"]{{font-family:'DM Sans',sans-serif}} .stApp{{background:var(--bg);color:var(--text)}}
+[data-testid="stHeader"]{{background:transparent}} [data-testid="stMainBlockContainer"]{{max-width:1500px;padding-top:1.2rem;padding-bottom:3rem}}
+section[data-testid="stSidebar"]{{background:var(--side);border-right:1px solid var(--border)}} section[data-testid="stSidebar"]>div{{padding-top:1.3rem}}
+.stApp p,.stApp label,.stApp li,.stApp h1,.stApp h2,.stApp h3,.stApp h4,.stApp [data-testid="stMarkdownContainer"],section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:var(--text)}}
+h1,h2,h3,.brand,.hero-title,.section-title{{font-family:'Playfair Display',Georgia,serif!important;letter-spacing:-.025em}}
+.brand{{font-size:1.65rem;font-weight:700}} .muted,.stApp [data-testid="stCaptionContainer"] p{{color:var(--muted)!important}}
+.hero{{background:linear-gradient(135deg,var(--card),#202a39);border:1px solid var(--border);border-radius:24px;padding:clamp(22px,4vw,38px);margin-bottom:1.2rem}}
+.hero-kicker{{color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;font-weight:700;margin-bottom:.8rem}}
+.hero-title{{font-size:clamp(2rem,4vw,3.1rem);line-height:1.15;color:var(--text)}} .hero-copy{{color:var(--muted);font-size:1rem;line-height:1.75;max-width:720px;margin-top:.7rem}}
+.section-title{{font-size:1.65rem;margin:1.2rem 0 .2rem;color:var(--text)}} .section-subtitle{{color:var(--muted);margin-bottom:1rem;line-height:1.6}}
+.metric{{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:16px;min-height:120px;margin-bottom:.65rem}}
+.metric-head{{display:flex;justify-content:space-between;color:var(--muted);font-weight:600;font-size:.86rem}} .metric-head span{{background:var(--accentbg);padding:5px 9px;border-radius:9px;color:var(--accent)}}
+.metric-value{{font-size:1.9rem;font-weight:700;margin-top:8px;overflow-wrap:anywhere}}
+[data-testid="stVerticalBlockBorderWrapper"]{{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important}}
+.stApp input,.stApp textarea,.stApp [data-baseweb="input"] input,.stApp [data-baseweb="textarea"] textarea{{background:var(--input)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;caret-color:var(--text)!important;border-color:var(--border)!important;opacity:1!important}}
+.stApp input::placeholder,.stApp textarea::placeholder{{color:var(--muted)!important;-webkit-text-fill-color:var(--muted)!important;opacity:1!important}}
+.stApp [data-baseweb="select"]>div,.stApp [data-baseweb="select"] *{{background-color:var(--input);color:var(--text)!important;border-color:var(--border)!important}}
+[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]{{background:var(--card)!important;color:var(--text)!important}}
+.stApp .stButton>button,.stApp .stDownloadButton>button{{background:var(--card2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:11px!important;min-height:44px;font-weight:650;white-space:normal}}
+.stApp .stButton>button:hover,.stApp .stDownloadButton>button:hover{{border-color:var(--accent)!important;color:var(--accent)!important}}
+.stApp [data-testid="stFormSubmitButton"] button,.stApp button[kind="primary"]{{background:var(--accent)!important;color:#111722!important;border:1px solid var(--accent)!important;border-radius:11px!important;min-height:46px;font-weight:700}}
+.stApp [data-testid="stFormSubmitButton"] button *,.stApp button[kind="primary"] *{{color:#111722!important;-webkit-text-fill-color:#111722!important}}
+.stApp hr{{border-color:var(--border)}} a{{color:var(--accent)!important}}
+@media(max-width:760px){{[data-testid="stMainBlockContainer"]{{padding:.8rem .7rem 2rem}}.hero{{border-radius:18px;padding:21px}}.hero-title{{font-size:clamp(1.8rem,8vw,2.5rem)}}.metric{{padding:12px;min-height:105px}}.metric-value{{font-size:1.55rem}}.section-title{{font-size:1.4rem}}.stApp .stButton>button{{min-height:46px}}}}
+</style>""",unsafe_allow_html=True)
+
+today=date.today(); now=datetime.now()
+pages=["Home","Tasks & Routines","Groceries","Calendar & Reminders","Family Notes","Memories","Household Budget","Activity & Greetings","Backups & Settings"]
+labels={"Home":"🏡 Home","Tasks & Routines":"✓ Tasks & routines","Groceries":"🛒 Groceries","Calendar & Reminders":"▦ Calendar & reminders","Family Notes":"♡ Family notes","Memories":"✦ Memories timeline","Household Budget":"€ Household budget","Activity & Greetings":"☀ Greetings & activity","Backups & Settings":"⚙ Backups & settings"}
 with st.sidebar:
-    st.markdown('<div class="brand-title">Our Family Hub</div>',
-                unsafe_allow_html=True)
-    st.markdown(
-        '<div class="brand-subtitle">A calmer way to organise life, together.</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="sidebar-label">Appearance</div>',
-                unsafe_allow_html=True)
-    st.caption("Dark theme · Always on")
-
-    st.markdown('<div class="sidebar-label">Your space</div>',
-                unsafe_allow_html=True)
-
-    page = st.radio(
-        "Navigate",
-        [
-            "Home",
-            "Tasks",
-            "Groceries",
-            "Appointments",
-            "Family Notes",
-            "Shopping History",
-        ],
-        format_func=lambda x: {
-            "Home": "🏡   Home",
-            "Tasks": "✓   Tasks",
-            "Groceries": "🛒   Groceries",
-            "Appointments": "▦   Appointments",
-            "Family Notes": "♡   Family Notes",
-            "Shopping History": "↗   Shopping History",
-        }[x],
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    st.caption("MADE FOR TWO")
-    st.markdown("**Suchi & Abi** 💗")
+    st.markdown('<div class="brand">Our Family Hub</div>',unsafe_allow_html=True)
+    st.caption("A calmer way to organise life, together.")
+    st.caption("🌙 Dark theme · Always on")
+    page=st.radio("Navigate",pages,key="page",format_func=lambda p:labels[p],label_visibility="collapsed")
+    st.divider(); st.caption("MADE FOR TWO"); st.markdown("**Suchi & Abi** 💙")
     st.caption("Small steps, big love.")
 
-# Recalculate after selecting the theme.
-C = THEMES["Dark"]
+tasks=get("tasks"); groceries=get("groceries"); events=get("events"); notes=get("notes"); memories=get("memories"); tx=get("transactions")
+st.markdown(f'<div class="hero"><div class="hero-kicker">YOUR HOME · YOUR LITTLE WORLD</div><div class="hero-title">A little more organised.<br>A little more together.</div><div class="hero-copy">Welcome back, Suchi &amp; Abi. Keep track of everyday things, make space for the good moments, and take life one step at a time.</div><div class="muted">{today.strftime("%A, %d %B %Y")} · Made with love ♡</div></div>',unsafe_allow_html=True)
 
-# Streamlit reruns after a theme change; the CSS above uses the
-# theme value available at the start of that rerun.
-
-
-# =========================================================
-# HERO
-# =========================================================
-today = date.today()
-
-st.markdown(
-    textwrap.dedent(f"""
-    <div class="hero">
-        <div class="hero-kicker">YOUR HOME · YOUR LITTLE WORLD</div>
-        <div class="hero-title">A little more organised.<br>A little more together.</div>
-        <div class="hero-copy">
-            Welcome back, Suchi &amp; Abi. Keep track of everyday things,
-            make space for the good moments, and take life one step at a time.
-        </div>
-        <div class="hero-footer">
-            {today.strftime("%A, %d %B %Y")} &nbsp; · &nbsp; Made with love ♡
-        </div>
-    </div>
-    """),
-    unsafe_allow_html=True,
-)
-
-# =========================================================
-# HOME
-# =========================================================
-if page == "Home":
-    pending = sum(not t["done"] for t in st.session_state.tasks)
-    bought = sum(g["bought"] for g in st.session_state.groceries)
-    remaining_groceries = len(st.session_state.groceries) - bought
-
-    upcoming = sum(
-        a["date"] >= today for a in st.session_state.appointments
-    )
-
-    m1, m2, m3 = st.columns(3)
-
-    with m1:
-        metric_card("Open tasks", pending, "✓", "Little things, one step at a time")
-
-    with m2:
-        metric_card("Shopping list", remaining_groceries, "🛒", "Items still to pick up")
-
-    with m3:
-        metric_card("Coming up", upcoming, "▦", "Future appointments")
-
-    section_title("Your day, at a glance", "A little overview of what needs your attention.")
-
-    left, right = st.columns([1.15, 0.85], gap="large")
-
-    with left:
-        card(
-            "A gentle reminder",
-            "You don't need to do everything today. Choose what matters, "
-            "help each other where you can, and leave a little room to rest.",
-            "♡",
-            "A NOTE FOR US",
-        )
-
+if page=="Home":
+    pending=sum(not x.get("done") for x in tasks); left=sum(not x.get("bought") for x in groceries)
+    upcoming=sum(as_date(x["date"])>=today for x in events if x.get("date"))
+    month= today.strftime("%Y-%m")
+    spent=sum(float(x.get("amount",0) or 0) for x in tx if x.get("kind")=="Expense" and str(x.get("date",""))[:7]==month)
+    cols=st.columns(4)
+    for c,args in zip(cols,[("Open tasks",pending,"Little steps to take","✓"),("Shopping list",left,"Items still to pick up","🛒"),("Coming up",upcoming,"Upcoming events","▦"),("Monthly spend",f"€{spent:,.2f}","Recorded expenses","€")]):
+        with c: metric(*args)
+    greet="Good morning" if now.hour<12 else ("Good afternoon" if now.hour<18 else "Good evening")
+    st.markdown(f"### {greet}, Suchi & Abi 💙")
+    mood_options=["Happy","Relaxed","Grateful","Busy","Tired","Need a little love"]
+    mood=setting("mood","Happy")
+    st.write({"Happy":"Enjoy the lovely moments. ☀️","Relaxed":"Keep that peaceful feeling close. 🌿","Grateful":"Notice the little things that make life sweet. 💗","Busy":"One thing at a time. You have got this. 🌸","Tired":"Rest counts, too. Be kind to yourselves. ☁️","Need a little love":"A kind word or a hug can go a long way. ♡"}.get(mood,"One step at a time. 💙"))
+    selected=st.selectbox("Today's shared mood",mood_options,index=mood_options.index(mood) if mood in mood_options else 0)
+    if selected!=mood: set_setting("mood",selected); st.rerun()
+    due=[x for x in tasks if not x.get("done") and x.get("due") and as_date(x["due"])<=today]
+    today_events=[x for x in events if x.get("date") and as_date(x["date"])==today]
+    if due or today_events: st.warning(f"Reminder: {len(due)} task(s) due/overdue · {len(today_events)} event(s) today")
+    else: st.success("You're all caught up on today's reminders. Make a little room to breathe.")
+    section("Quick actions","Add something in just a tap.")
+    q=st.columns(4)
+    for c,label,target in zip(q,["＋ Add task","🛒 Add groceries","📅 Add event","♡ Write a note"],["Tasks & Routines","Groceries","Calendar & Reminders","Family Notes"]):
+        with c:
+            if st.button(label,key="quick_"+target,use_container_width=True): st.session_state["quick_open"]=target; go(target)
+    section("Your day, at a glance","Your home hub, all in one place.")
+    leftc,rightc=st.columns([1.15,.85],gap="large")
+    with leftc:
+        with st.container(border=True):
+            st.markdown("### ♡ A gentle reminder"); st.write("You don't need to do everything today. Choose what matters, help each other where you can, and leave a little room to rest.")
         st.markdown("#### Tasks to tackle")
-
-        open_tasks = [t for t in st.session_state.tasks if not t["done"]]
-
-        if open_tasks:
-            for task in open_tasks[:5]:
+        opened=sorted([x for x in tasks if not x.get("done")],key=lambda x:(x.get("due") or "9999",x.get("priority")!="High"))
+        if opened:
+            for x in opened[:5]:
                 with st.container(border=True):
-                    st.markdown(f"**{safe(task['name'])}**")
-                    st.caption(
-                        f"{task['assigned']} · {task['priority']} priority"
-                    )
-        else:
-            st.success("All caught up! Time for a little breathing room.")
-
-        if st.button("Open task list →", use_container_width=True):
-            st.session_state["_jump_page"] = "Tasks"
-            st.rerun()
-
-    with right:
-        card(
-            "Our daily mood",
-            "Check in with yourselves. A tiny moment of reflection "
-            "can make a busy day feel a little lighter.",
-            "☀️",
-            "HOW ARE WE FEELING?",
-        )
-
-        moods = [
-            "Happy",
-            "Relaxed",
-            "Grateful",
-            "Busy",
-            "Tired",
-            "Need a little love",
-        ]
-
-        st.selectbox(
-            "Today's mood",
-            moods,
-            key="mood",
-        )
-
-        mood_copy = {
-            "Happy": "Enjoy the lovely moments. ☀️",
-            "Relaxed": "Keep that peaceful feeling close. 🌿",
-            "Grateful": "Notice the little things that make life sweet. 💗",
-            "Busy": "One thing at a time. You have got this. 🌸",
-            "Tired": "Rest counts, too. Be kind to yourselves. ☁️",
-            "Need a little love": "A kind word or a hug can go a long way. ♡",
-        }
-
-        st.info(mood_copy[st.session_state.mood])
-
-        st.markdown("#### Next appointment")
-
-        future_appointments = sorted(
-            [a for a in st.session_state.appointments if a["date"] >= today],
-            key=lambda a: (a["date"], a["time"]),
-        )
-
-        if future_appointments:
-            a = future_appointments[0]
-            card(
-                a["title"],
-                f"{pretty_date(a['date'])} · {a['time']}"
-                + (f" · {a['location']}" if a["location"] else ""),
-                "📅",
-            )
-        else:
-            st.caption("Nothing scheduled just yet.")
-
-    st.markdown("---")
-    section_title("Little things to remember", "Your home hub, all in one place.")
-
-    # Native Streamlit cards: reliable rendering (no raw HTML in Markdown).
-    q1, q2, q3 = st.columns(3, gap="large")
-
-    with q1:
+                    st.markdown(f"**{safe(x.get('name','Task'))}**"); st.caption(f"{safe(x.get('assigned','Both'))} · {safe(x.get('priority','Normal'))} priority"+(f" · Due {fmt_date(x['due'])}" if x.get("due") else ""))
+        else: st.success("All caught up! Time for a little breathing room.")
+        if st.button("Open task list →",use_container_width=True): go("Tasks & Routines")
+    with rightc:
+        future=sorted([x for x in events if x.get("date") and as_date(x["date"])>=today],key=lambda x:(x.get("date",""),x.get("time","")))
         with st.container(border=True):
-            st.markdown("### ✓  Tasks")
-            st.write("Share responsibilities and celebrate each finished task.")
-            if st.button("Open tasks →", key="home_open_tasks", use_container_width=True):
-                st.session_state["_jump_page"] = "Tasks"
-                st.rerun()
-
-    with q2:
+            st.markdown("### 📅 Next appointment")
+            if future: st.write(f"{future[0].get('title','Event')} · {fmt_date(future[0]['date'])} · {future[0].get('time','')}")
+            else: st.write("Nothing scheduled just yet.")
         with st.container(border=True):
-            st.markdown("### 🛒  Groceries")
-            st.write("Keep your shopping list simple and up to date.")
-            if st.button("Open groceries →", key="home_open_groceries", use_container_width=True):
-                st.session_state["_jump_page"] = "Groceries"
-                st.rerun()
+            st.markdown("### ✦ Our little moments"); st.write(f"{len(memories)} memories saved so far. Keep the good things close.")
+            if st.button("Add a memory →",use_container_width=True): go("Memories")
+    st.markdown("---"); section("Little things to remember","Your home hub, all in one place.")
+    c1,c2,c3=st.columns(3,gap="large")
+    for c,icon,title,desc,target in [(c1,"✓","Tasks","Share responsibilities and celebrate each finished task.","Tasks & Routines"),(c2,"🛒","Groceries","Keep your shopping list simple and up to date.","Groceries"),(c3,"♡","Family notes","Save messages, reminders, and little memories.","Family Notes")]:
+        with c:
+            with st.container(border=True):
+                st.markdown(f"### {icon}  {title}"); st.write(desc)
+                if st.button(f"Open {title.lower()} →",key="home_"+target,use_container_width=True): go(target)
 
-    with q3:
+elif page=="Tasks & Routines":
+    section("Our tasks & routines","Share the load, and let recurring chores return automatically.")
+    with st.expander("＋ Add a task",expanded=bool(st.session_state.get("quick_open")==page or not tasks)):
+        with st.form("task_form",clear_on_submit=True):
+            name=st.text_input("What needs doing?",placeholder="Tidy the living room")
+            a,b=st.columns(2)
+            with a: assigned=st.selectbox("Who's taking it?",["Both","Suchi","Abi"])
+            with b: priority=st.selectbox("Priority",["Normal","High","Low"])
+            due_on=st.checkbox("Add due date"); due=st.date_input("Due date",value=today) if due_on else None
+            repeat=st.selectbox("Repeat",["Does not repeat","Daily","Weekly","Monthly"])
+            if st.form_submit_button("Add task",use_container_width=True):
+                if name.strip(): add("tasks",{"name":name.strip(),"assigned":assigned,"priority":priority,"due":due.isoformat() if due else None,"done":False,"repeat":repeat,"next_generated":None}); st.rerun()
+                else: st.warning("Please enter a task name.")
+    # Generate the next recurring instance after a completed task reaches its next cycle.
+    for x in list(get("tasks")):
+        repeat=x.get("repeat","Does not repeat")
+        if x.get("done") and repeat!="Does not repeat" and x.get("due") and x.get("next_generated")!=today.isoformat():
+            d=as_date(x["due"])
+            due_next=d+timedelta(days=1 if repeat=="Daily" else 7) if repeat in ("Daily","Weekly") else date(d.year+((d.month)//12),((d.month)%12)+1,min(d.day,28))
+            if due_next<=today:
+                add("tasks",{"name":x["name"],"assigned":x.get("assigned","Both"),"priority":x.get("priority","Normal"),"due":due_next.isoformat(),"done":False,"repeat":repeat,"next_generated":None})
+                edit("tasks",x["id"],next_generated=today.isoformat())
+    tasks=get("tasks"); completed=sum(bool(x.get("done")) for x in tasks)
+    st.progress(completed/len(tasks) if tasks else 0,text=f"{completed} of {len(tasks)} tasks completed")
+    filt=st.segmented_control("Show tasks",["All","Open","Completed"],default="All")
+    shown=[x for x in tasks if filt=="All" or (filt=="Open" and not x.get("done")) or (filt=="Completed" and x.get("done"))]
+    for x in shown:
         with st.container(border=True):
-            st.markdown("### ♡  Family notes")
-            st.write("Save messages, reminders, and little memories.")
-            if st.button("Open notes →", key="home_open_notes", use_container_width=True):
-                st.session_state["_jump_page"] = "Family Notes"
+            a,b,c=st.columns([.1,.68,.22])
+            with a: checked=st.checkbox("Complete",value=bool(x.get("done")),key="done_"+x["id"],label_visibility="collapsed")
+            if checked!=bool(x.get("done")):
+                edit("tasks",x["id"],done=checked)
+                if checked: activity("Completed task",x.get("name",""))
                 st.rerun()
+            with b:
+                st.markdown(f"~~{safe(x.get('name','Task'))}~~" if x.get("done") else f"**{safe(x.get('name','Task'))}**")
+                st.caption(f"{x.get('assigned','Both')} · {x.get('priority','Normal')} priority"+(f" · Due {fmt_date(x['due'])}" if x.get("due") else "")+(f" · Repeats {x['repeat'].lower()}" if x.get("repeat") not in (None,"Does not repeat") else ""))
+            with c:
+                if st.button("Delete",key="del_task_"+x["id"],use_container_width=True): remove("tasks",x["id"]); st.rerun()
+    section("Reusable routines","Save a recurring checklist or household rhythm.")
+    with st.expander("＋ Create routine"):
+        with st.form("routine_form",clear_on_submit=True):
+            rn=st.text_input("Routine name",placeholder="Sunday reset"); desc=st.text_input("What's included?",placeholder="Laundry, tidy kitchen, plan the week")
+            freq=st.selectbox("Frequency",["Daily","Weekly","Monthly"]); who=st.selectbox("Responsible",["Both","Suchi","Abi"])
+            if st.form_submit_button("Save routine"):
+                if rn.strip(): add("routines",{"name":rn.strip(),"description":desc.strip(),"frequency":freq,"assigned":who,"last_done":None}); st.rerun()
+                else: st.warning("Add a routine name.")
+    for r in get("routines"):
+        with st.container(border=True):
+            a,b,c=st.columns([.62,.2,.18])
+            with a:
+                st.markdown(f"**{safe(r['name'])}**"); st.caption(f"{r.get('frequency','Weekly')} · {r.get('assigned','Both')}"+(f" · {safe(r.get('description',''))}" if r.get("description") else ""))
+                if r.get("last_done"): st.caption("Last completed: "+fmt_date(r["last_done"]))
+            with b:
+                if st.button("Done today",key="routine_done_"+r["id"],use_container_width=True): edit("routines",r["id"],last_done=today.isoformat()); activity("Completed routine",r["name"]); st.rerun()
+            with c:
+                if st.button("Delete",key="routine_del_"+r["id"],use_container_width=True): remove("routines",r["id"]); st.rerun()
 
-
-# =========================================================
-# TASKS
-# =========================================================
-elif page == "Tasks":
-    section_title("Our tasks", "Plan together without making the day feel complicated.")
-
-    with st.expander("＋ Add a new task", expanded=not st.session_state.tasks):
-        with st.form("task_form", clear_on_submit=True):
-            name = st.text_input("What needs doing?", placeholder="Tidy the living room")
-            c1, c2 = st.columns(2)
-            with c1:
-                assigned = st.selectbox("Who's taking it?", ["Both", "Suchi", "Abi"])
-            with c2:
-                priority = st.selectbox("Priority", ["Normal", "High", "Low"])
-
-            has_due = st.checkbox("Add a due date")
-            due = st.date_input("Due date", value=today) if has_due else None
-
-            if st.form_submit_button("Add task", use_container_width=True):
+elif page=="Groceries":
+    section("Grocery list","A shared, categorised list that stays up to date.")
+    with st.expander("＋ Add grocery item",expanded=bool(st.session_state.get("quick_open")==page or not groceries)):
+        with st.form("grocery_form",clear_on_submit=True):
+            a,b=st.columns([.62,.38])
+            with a: name=st.text_input("Item",placeholder="Fresh strawberries")
+            with b: qty=st.text_input("Quantity",placeholder="2 packs")
+            category=st.selectbox("Category",["Produce","Bakery","Dairy & eggs","Meat & fish","Pantry","Frozen","Household","Other"])
+            if st.form_submit_button("Add to list",use_container_width=True):
                 if name.strip():
-                    st.session_state.tasks.append({
-                        "name": name.strip(),
-                        "assigned": assigned,
-                        "priority": priority,
-                        "due": due,
-                        "done": False,
-                    })
+                    if not any(g.get("name","").casefold()==name.strip().casefold() and not g.get("bought") for g in get("groceries")): add("groceries",{"name":name.strip(),"quantity":qty.strip() or "As needed","category":category,"bought":False}); activity("Added grocery",name.strip())
+                    else: st.info("That item is already on your open list.")
                     st.rerun()
-                else:
-                    st.warning("Please enter a task name.")
-
-    total = len(st.session_state.tasks)
-    completed = sum(t["done"] for t in st.session_state.tasks)
-    progress = completed / total if total else 0
-
-    st.markdown("#### Your progress")
-    st.progress(progress, text=f"{completed} of {total} tasks completed")
-
-    selected_filter = st.segmented_control(
-        "Filter tasks",
-        options=["All", "Open", "Completed"],
-        default="All",
-        key="task_filter",
-    )
-
-    tasks = list(enumerate(st.session_state.tasks))
-
-    if selected_filter == "Open":
-        tasks = [(i, t) for i, t in tasks if not t["done"]]
-    elif selected_filter == "Completed":
-        tasks = [(i, t) for i, t in tasks if t["done"]]
-
-    if not tasks:
-        st.info("Nothing to show here. Add a task whenever you're ready.")
-    else:
-        for i, task in tasks:
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([0.1, 0.68, 0.22])
-
-                with c1:
-                    checked = st.checkbox(
-                        "Complete",
-                        value=task["done"],
-                        key=f"task_check_{i}",
-                        label_visibility="collapsed",
-                    )
-
-                if checked != task["done"]:
-                    st.session_state.tasks[i]["done"] = checked
-                    st.rerun()
-
-                with c2:
-                    if task["done"]:
-                        st.markdown(f"~~{safe(task['name'])}~~")
-                    else:
-                        st.markdown(f"**{safe(task['name'])}**")
-
-                    due_text = (
-                        pretty_date(task["due"]) if task["due"] else "No due date"
-                    )
-                    st.caption(
-                        f"{task['assigned']} · {task['priority']} priority · {due_text}"
-                    )
-
-                with c3:
-                    if st.button("Delete", key=f"task_delete_{i}"):
-                        st.session_state.tasks.pop(i)
-                        st.rerun()
-
-
-# =========================================================
-# GROCERIES
-# =========================================================
-elif page == "Groceries":
-    section_title("Grocery list", "A calmer shopping trip starts with a simple list.")
-
-    with st.expander("＋ Add grocery item", expanded=not st.session_state.groceries):
-        with st.form("grocery_form", clear_on_submit=True):
-            name = st.text_input("Item", placeholder="Fresh strawberries")
-            quantity = st.text_input("Quantity", placeholder="2 packs")
-            if st.form_submit_button("Add to list", use_container_width=True):
-                if name.strip():
-                    st.session_state.groceries.append({
-                        "name": name.strip(),
-                        "quantity": quantity.strip() or "As needed",
-                        "bought": False,
-                    })
-                    record_history("Added", name.strip())
-                    st.rerun()
-                else:
-                    st.warning("Please enter an item.")
-
-    items = st.session_state.groceries
-    remaining = sum(not item["bought"] for item in items)
-    st.caption(f"{remaining} items left to pick up")
-
-    if not items:
-        card("Your list is clear", "Add groceries above whenever you need them.", "🛒")
-    else:
-        for i, item in enumerate(items):
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([0.1, 0.68, 0.22])
-
-                with c1:
-                    checked = st.checkbox(
-                        "Bought",
-                        value=item["bought"],
-                        key=f"grocery_check_{i}",
-                        label_visibility="collapsed",
-                    )
-
-                if checked != item["bought"]:
-                    st.session_state.groceries[i]["bought"] = checked
-                    if checked:
-                        record_history("Marked as bought", item["name"])
-                    st.rerun()
-
-                with c2:
-                    st.markdown(
-                        f"~~{safe(item['name'])}~~"
-                        if item["bought"] else f"**{safe(item['name'])}**"
-                    )
-                    st.caption(f"Quantity: {safe(item['quantity'])}")
-
-                with c3:
-                    if st.button("Remove", key=f"grocery_delete_{i}"):
-                        record_history("Removed", item["name"])
-                        st.session_state.groceries.pop(i)
-                        st.rerun()
-
-        if st.button("Clear purchased items"):
-            st.session_state.groceries = [
-                item for item in items if not item["bought"]
-            ]
+                else: st.warning("Please enter an item.")
+    groceries=get("groceries"); bought=[g for g in groceries if g.get("bought")]
+    st.caption(f"{len(groceries)-len(bought)} items left · {len(bought)} picked up")
+    filt=st.selectbox("Show",["All items","Still to buy","Purchased"])
+    shown=[g for g in groceries if filt=="All items" or (filt=="Still to buy" and not g.get("bought")) or (filt=="Purchased" and g.get("bought"))]
+    shown.sort(key=lambda g:(g.get("bought",False),g.get("category",""),g.get("name","").lower()))
+    if not shown: st.info("Your list is clear. Add groceries whenever you need them.")
+    for g in shown:
+        with st.container(border=True):
+            a,b,c=st.columns([.1,.67,.23])
+            with a: checked=st.checkbox("Bought",value=bool(g.get("bought")),key="bought_"+g["id"],label_visibility="collapsed")
+            if checked!=bool(g.get("bought")):
+                edit("groceries",g["id"],bought=checked)
+                if checked: activity("Bought grocery",g["name"])
+                st.rerun()
+            with b:
+                st.markdown(f"~~{safe(g['name'])}~~" if g.get("bought") else f"**{safe(g['name'])}**")
+                st.caption(f"{safe(g.get('category','Other'))} · Quantity: {safe(g.get('quantity','As needed'))}")
+            with c:
+                if st.button("Remove",key="remove_g_"+g["id"],use_container_width=True): activity("Removed grocery",g["name"]); remove("groceries",g["id"]); st.rerun()
+    a,b=st.columns(2)
+    with a:
+        if st.button("Add previous items back",use_container_width=True):
+            for g in bought: add("groceries",{"name":g["name"],"quantity":g.get("quantity","As needed"),"category":g.get("category","Other"),"bought":False})
+            st.rerun()
+    with b:
+        if st.button("Clear purchased items",use_container_width=True):
+            for g in bought: remove("groceries",g["id"])
             st.rerun()
 
+elif page=="Calendar & Reminders":
+    section("Calendar & reminders","Shared plans, important dates, and gentle reminders.")
+    with st.expander("＋ Add an event",expanded=bool(st.session_state.get("quick_open")==page or not events)):
+        with st.form("event_form",clear_on_submit=True):
+            title=st.text_input("What's happening?",placeholder="Family dinner")
+            a,b=st.columns(2)
+            with a: event_date=st.date_input("Date",value=today)
+            with b: event_time=st.time_input("Time",value=time(18,0))
+            location=st.text_input("Location (optional)"); details=st.text_area("Notes (optional)")
+            reminder=st.selectbox("Reminder",["On the day","1 day before","3 days before","1 week before","No reminder"])
+            if st.form_submit_button("Save event",use_container_width=True):
+                if title.strip(): add("events",{"title":title.strip(),"date":event_date.isoformat(),"time":event_time.strftime("%H:%M"),"location":location.strip(),"notes":details.strip(),"reminder":reminder}); activity("Added event",title.strip()); st.rerun()
+                else: st.warning("Please enter an event title.")
+    events=get("events"); month=st.date_input("Browse month",value=today)
+    month_events=[e for e in events if e.get("date") and as_date(e["date"]).year==month.year and as_date(e["date"]).month==month.month]
+    st.markdown(f"### {month.strftime('%B %Y')}")
+    for e in sorted(month_events,key=lambda x:(x.get("date",""),x.get("time",""))):
+        with st.container(border=True):
+            a,b=st.columns([.78,.22])
+            with a:
+                st.markdown(f"### 📅 {safe(e.get('title','Event'))}"); st.caption(f"{fmt_date(e['date'])} · {safe(e.get('time',''))}")
+                if e.get("location"): st.write("Location: "+safe(e["location"]))
+                if e.get("notes"): st.write(e["notes"])
+                st.caption("Reminder: "+safe(e.get("reminder","On the day")))
+            with b:
+                if st.button("Delete",key="del_event_"+e["id"],use_container_width=True): remove("events",e["id"]); st.rerun()
+    if not month_events: st.info("No events in this month yet.")
+    section("Reminder centre","Reminders are calculated when the app is opened or refreshed.")
+    reminders=[]
+    for t in get("tasks"):
+        if not t.get("done") and t.get("due") and as_date(t["due"])<=today: reminders.append(("Task",t.get("name","Task"),t["due"]))
+    for e in events:
+        if e.get("date"):
+            days=(as_date(e["date"])-today).days
+            lead={"On the day":0,"1 day before":1,"3 days before":3,"1 week before":7}.get(e.get("reminder","On the day"))
+            if lead is not None and days==lead: reminders.append(("Event",e.get("title","Event"),e["date"]))
+    if reminders:
+        for kind,title,due in reminders: st.warning(f"{kind}: {title} · {fmt_date(due)}")
+    else: st.success("No reminders due right now.")
+    st.info("These are in-app reminders. Automatic push notifications or scheduled email require a separately configured scheduler/service.")
 
-# =========================================================
-# APPOINTMENTS
-# =========================================================
-elif page == "Appointments":
-    section_title("Appointments", "Keep the important dates close at hand.")
+elif page=="Family Notes":
+    section("Family notes","A shared place for messages, reminders, and little thoughts.")
+    with st.expander("＋ Write a note",expanded=bool(st.session_state.get("quick_open")==page or not notes)):
+        with st.form("note_form",clear_on_submit=True):
+            title=st.text_input("Title",placeholder="A little reminder"); body=st.text_area("Your note",placeholder="Write something you want to remember...",height=130)
+            author=st.selectbox("From",["Both","Suchi","Abi"])
+            if st.form_submit_button("Save note",use_container_width=True):
+                if body.strip(): add("notes",{"title":title.strip() or "A little note","body":body.strip(),"author":author,"created":stamp()}); activity("Added note",title.strip() or "A little note"); st.rerun()
+                else: st.warning("Write a note before saving.")
+    notes=get("notes")
+    if not notes: st.info("Your saved notes will appear here.")
+    for n in reversed(notes):
+        with st.container(border=True):
+            st.markdown(f"### ♡ {safe(n.get('title','A little note'))}"); st.caption(f"{safe(n.get('created',''))} · From {safe(n.get('author','Both'))}"); st.write(n.get("body",""))
+            if st.button("Delete note",key="del_note_"+n["id"]): remove("notes",n["id"]); st.rerun()
 
-    with st.expander("＋ Add appointment", expanded=not st.session_state.appointments):
-        with st.form("appointment_form", clear_on_submit=True):
-            title = st.text_input("What's happening?", placeholder="Family dinner")
-            c1, c2 = st.columns(2)
-            with c1:
-                appointment_date = st.date_input("Date", value=today)
-            with c2:
-                appointment_time = st.time_input("Time")
+elif page=="Memories":
+    section("Our memories","A little timeline of moments you want to keep.")
+    with st.expander("＋ Add a memory",expanded=not memories):
+        with st.form("memory_form",clear_on_submit=True):
+            title=st.text_input("Memory title",placeholder="Our lovely Sunday"); mem_date=st.date_input("When did it happen?",value=today)
+            story=st.text_area("What do you want to remember?",placeholder="Write down the little details...")
+            tags=st.text_input("Tags (optional)",placeholder="date night, trip, family"); photo=st.text_input("Photo URL (optional)",placeholder="https://...")
+            if st.form_submit_button("Save memory",use_container_width=True):
+                if title.strip() or story.strip():
+                    add("memories",{"title":title.strip() or "A little moment","date":mem_date.isoformat(),"story":story.strip(),"tags":[t.strip() for t in tags.split(",") if t.strip()],"photo_url":photo.strip()}); activity("Saved memory",title.strip() or "A little moment"); st.rerun()
+                else: st.warning("Add a title or a few words to remember.")
+    memories=get("memories")
+    if not memories: st.info("Your story starts here. Save a celebration or a small moment.")
+    for m in sorted(memories,key=lambda x:x.get("date",""),reverse=True):
+        with st.container(border=True):
+            st.caption("✦  "+fmt_date(m.get("date",today.isoformat()))); st.markdown(f"### {safe(m.get('title','A little moment'))}")
+            if str(m.get("photo_url","")).startswith(("https://","http://")): st.image(m["photo_url"],use_container_width=True)
+            if m.get("story"): st.write(m["story"])
+            if m.get("tags"): st.caption(" · ".join("#"+str(t) for t in m["tags"]))
+            if st.button("Delete memory",key="del_mem_"+m["id"]): remove("memories",m["id"]); st.rerun()
 
-            location = st.text_input("Location", placeholder="Optional")
-            details = st.text_area("Notes", placeholder="Anything to remember?")
+elif page=="Household Budget":
+    section("Household budget","A simple shared view of household spending and income.")
+    tx=get("transactions"); month=today.strftime("%Y-%m"); month_tx=[x for x in tx if str(x.get("date",""))[:7]==month]
+    income=sum(float(x.get("amount",0) or 0) for x in month_tx if x.get("kind")=="Income")
+    expense=sum(float(x.get("amount",0) or 0) for x in month_tx if x.get("kind")=="Expense")
+    a,b,c=st.columns(3)
+    with a: metric("Income",f"€{income:,.2f}","This month","↗")
+    with b: metric("Expenses",f"€{expense:,.2f}","This month","€")
+    with c: metric("Balance",f"€{income-expense:,.2f}","Income minus expenses","◎")
+    with st.expander("＋ Add transaction",expanded=not tx):
+        with st.form("tx_form",clear_on_submit=True):
+            desc=st.text_input("Description",placeholder="Groceries, electricity bill...")
+            a,b,c=st.columns(3)
+            with a: kind=st.selectbox("Type",["Expense","Income"])
+            with b: amount=st.number_input("Amount (€)",min_value=0.0,step=1.0,format="%.2f")
+            with c: trans_date=st.date_input("Date",value=today)
+            category=st.selectbox("Category",["Groceries","Bills","Rent / mortgage","Transport","Home","Eating out","Income","Other"])
+            paid=st.selectbox("Paid by",["Shared","Suchi","Abi"])
+            if st.form_submit_button("Save transaction",use_container_width=True):
+                if desc.strip() and amount>0: add("transactions",{"description":desc.strip(),"kind":kind,"amount":round(amount,2),"date":trans_date.isoformat(),"category":category,"paid_by":paid}); activity("Added transaction",desc.strip()); st.rerun()
+                else: st.warning("Enter a description and amount greater than zero.")
+    for x in sorted(get("transactions"),key=lambda z:z.get("date",""),reverse=True):
+        with st.container(border=True):
+            a,b=st.columns([.78,.22])
+            with a:
+                sign="+" if x.get("kind")=="Income" else "−"; st.markdown(f"**{safe(x.get('description','Transaction'))}** · {sign}€{float(x.get('amount',0)):,.2f}")
+                st.caption(f"{fmt_date(x.get('date',today.isoformat()))} · {safe(x.get('category','Other'))} · Paid by {safe(x.get('paid_by','Shared'))}")
+            with b:
+                if st.button("Delete",key="del_tx_"+x["id"],use_container_width=True): remove("transactions",x["id"]); st.rerun()
+    if tx:
+        buf=io.StringIO(); writer=csv.writer(buf); writer.writerow(["date","description","kind","amount","category","paid_by"])
+        for x in tx: writer.writerow([x.get("date"),x.get("description"),x.get("kind"),x.get("amount"),x.get("category"),x.get("paid_by")])
+        st.download_button("Export transactions as CSV",buf.getvalue().encode("utf-8"),file_name="family_hub_budget.csv",mime="text/csv")
 
-            if st.form_submit_button("Save appointment", use_container_width=True):
-                if title.strip():
-                    st.session_state.appointments.append({
-                        "title": title.strip(),
-                        "date": appointment_date,
-                        "time": appointment_time.strftime("%H:%M"),
-                        "location": location.strip(),
-                        "notes": details.strip(),
-                    })
-                    st.rerun()
-                else:
-                    st.warning("Please enter an appointment title.")
+elif page=="Activity & Greetings":
+    section("Greetings & activity","A small daily hello, plus a shared record of things you've done.")
+    hour=now.hour; greeting="Good morning" if hour<12 else ("Good afternoon" if hour<18 else "Good evening")
+    st.markdown(f"### {greeting}, Suchi & Abi ☀️")
+    st.write("A fresh day, a fresh start. Thank each other for the little things, and remember that being a team matters more than a perfect to-do list.")
+    with st.container(border=True):
+        st.markdown("### 🎉 Celebrations & special dates")
+        with st.form("celebration_form",clear_on_submit=True):
+            title=st.text_input("Celebration or special date",placeholder="Anniversary, birthday, first date...")
+            d=st.date_input("Date",value=today); person=st.selectbox("For",["Both","Suchi","Abi"])
+            if st.form_submit_button("Save celebration"):
+                if title.strip(): add("events",{"title":"🎉 "+title.strip(),"date":d.isoformat(),"time":"All day","location":"","notes":"Celebration · "+person,"reminder":"On the day"}); activity("Added celebration",title.strip()); st.rerun()
+                else: st.warning("Enter a celebration name.")
+    upcoming=sorted([e for e in get("events") if e.get("date") and as_date(e["date"])>=today],key=lambda e:e["date"])
+    if upcoming:
+        st.markdown("#### Coming up")
+        for e in upcoming[:8]:
+            with st.container(border=True): st.markdown(f"**{safe(e.get('title','Event'))}**"); st.caption(fmt_date(e["date"]))
+    section("Recent shared activity","The latest changes made in this hub.")
+    log=get("activity")
+    if not log: st.info("Your shared activity will show here as you add tasks, notes, groceries, and memories.")
+    for item in reversed(log[-40:]):
+        with st.container(border=True):
+            st.markdown(f"**{safe(item.get('action','Update'))}** · {safe(item.get('item',''))}")
+            st.caption(item.get("when",""))
 
-    appointments = sorted(
-        enumerate(st.session_state.appointments),
-        key=lambda x: (x[1]["date"], x[1]["time"]),
-    )
+elif page=="Backups & Settings":
+    section("Backups & settings","Keep your household information safe and portable.")
+    st.markdown("### Persistent storage")
+    st.write(f"Database file: `{DB_PATH}`")
+    st.info("Both users share the same data only when they access the same deployed app connected to this same persistent database. A local database file does not sync across separate computers. For multiple app instances, configure a shared database.")
+    backup={"app":"Our Family Hub","exported_at":stamp(),"collections":{n:get(n) for n in COLLECTIONS},"settings":{"mood":setting("mood","Happy")}}
+    st.download_button("⬇ Download full JSON backup",json.dumps(backup,ensure_ascii=False,indent=2).encode("utf-8"),file_name=f"family_hub_backup_{today.isoformat()}.json",mime="application/json",use_container_width=True)
+    st.markdown("### Restore backup")
+    upload=st.file_uploader("Choose a Family Hub JSON backup",type=["json"])
+    confirm=st.checkbox("I understand restoring replaces current data.")
+    if st.button("Restore backup",disabled=not(upload and confirm),use_container_width=True):
+        try:
+            data=json.loads(upload.getvalue().decode("utf-8")); imported=data.get("collections",{})
+            if not isinstance(imported,dict): raise ValueError("Backup is missing its collections.")
+            for n in COLLECTIONS:
+                vals=imported.get(n,[])
+                if not isinstance(vals,list) or any(not isinstance(x,dict) for x in vals): raise ValueError(f"Invalid collection: {n}")
+            for n in COLLECTIONS: put(n,imported.get(n,[]))
+            set_setting("mood",data.get("settings",{}).get("mood","Happy"))
+            st.success("Backup restored successfully."); st.rerun()
+        except (ValueError,TypeError,UnicodeDecodeError,AttributeError) as exc: st.error(f"Could not restore backup: {exc}")
+    st.markdown("### Notifications")
+    st.write("In-app reminders show when you open or refresh the app. Scheduled email, push, or phone notifications need a separately configured scheduler or notification provider.")
+    st.markdown("### Shared setup checklist")
+    st.markdown("- Deploy one shared app URL for both users.\n- Keep the SQLite database on a persistent disk/volume.\n- Restrict access if notes and household finances are private.\n- Download backups regularly.")
+    st.markdown("### Export all data")
+    st.download_button("Download data as JSON",json.dumps(backup,ensure_ascii=False,indent=2).encode("utf-8"),file_name="family_hub_export.json",mime="application/json")
 
-    if not appointments:
-        card("A little breathing room", "No appointments added yet.", "📅")
-    else:
-        for i, a in appointments:
-            with st.container(border=True):
-                c1, c2 = st.columns([0.78, 0.22])
-
-                with c1:
-                    st.markdown(f"### {safe(a['title'])}")
-                    st.caption(f"📅 {pretty_date(a['date'])} · 🕒 {a['time']}")
-                    if a["location"]:
-                        st.write(f"**Location:** {safe(a['location'])}")
-                    if a["notes"]:
-                        st.write(a["notes"])
-
-                    if a["date"] < today:
-                        st.caption("Past appointment")
-
-                with c2:
-                    if st.button("Delete", key=f"appointment_delete_{i}"):
-                        st.session_state.appointments.pop(i)
-                        st.rerun()
-
-
-# =========================================================
-# FAMILY NOTES
-# =========================================================
-elif page == "Family Notes":
-    section_title("Family notes", "Messages, reminders, and memories worth keeping.")
-
-    with st.expander("＋ Write a note", expanded=not st.session_state.notes):
-        with st.form("note_form", clear_on_submit=True):
-            title = st.text_input("Title", placeholder="A little reminder")
-            body = st.text_area(
-                "Your note",
-                placeholder="Write something you want to remember...",
-                height=140,
-            )
-
-            if st.form_submit_button("Save note", use_container_width=True):
-                if body.strip():
-                    st.session_state.notes.append({
-                        "title": title.strip() or "A little note",
-                        "body": body.strip(),
-                        "created": datetime.now().strftime("%d %b %Y · %H:%M"),
-                    })
-                    st.rerun()
-                else:
-                    st.warning("Write a note before saving.")
-
-    if not st.session_state.notes:
-        card("A space for your thoughts", "Your saved notes will appear here.", "♡")
-    else:
-        for i in range(len(st.session_state.notes) - 1, -1, -1):
-            note = st.session_state.notes[i]
-            with st.container(border=True):
-                st.markdown(f"### ♡ {safe(note['title'])}")
-                st.caption(note["created"])
-                st.write(note["body"])
-
-                if st.button("Delete note", key=f"note_delete_{i}"):
-                    st.session_state.notes.pop(i)
-                    st.rerun()
-
-
-# =========================================================
-# SHOPPING HISTORY
-# =========================================================
-elif page == "Shopping History":
-    section_title("Shopping history", "A simple record of changes to your grocery list.")
-
-    history = st.session_state.shopping_history
-
-    if not history:
-        card("Your history starts here", "Add or update grocery items to see activity.", "↗")
-    else:
-        st.caption(f"{len(history)} recorded actions")
-
-        for entry in reversed(history):
-            with st.container(border=True):
-                st.markdown(f"**{safe(entry['action'])}**")
-                st.write(safe(entry["item"]))
-                st.caption(entry["date"])
-
-        if st.button("Clear history"):
-            st.session_state.shopping_history = []
-            st.rerun()
-
-
-# =========================================================
-# FOOTER
-# =========================================================
 st.markdown("---")
-st.markdown(
-    textwrap.dedent(f"""
-    <div style="
-        text-align: center;
-        color: {C["muted"]};
-        padding: 14px 0 8px 0;
-        font-size: 0.85rem;
-        line-height: 1.9;
-    ">
-        <span style="color: {C["accent"]};">♡</span>
-        &nbsp; Suchi &amp; Abi &nbsp; · &nbsp; Our little corner of the world
-        <br>
-        <span style="font-size: 0.78rem;">
-            Small steps, big love.
-        </span>
-    </div>
-    """),
-    unsafe_allow_html=True,
-)
+st.markdown(f'<div style="text-align:center;color:{DARK["muted"]};padding:14px 0 8px;font-size:.85rem;line-height:1.9;"><span style="color:{DARK["accent"]};">♡</span> &nbsp; Suchi &amp; Abi &nbsp; · &nbsp; Our little corner of the world<br><span style="font-size:.78rem;">Small steps, big love.</span></div>',unsafe_allow_html=True)
