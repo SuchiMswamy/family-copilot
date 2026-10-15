@@ -57,8 +57,14 @@ def section(title,sub=""):
 def metric(label,value,detail,icon):
     st.markdown(f'<div class="metric"><div class="metric-head">{safe(label)} <span>{safe(icon)}</span></div><div class="metric-value">{safe(value)}</div><div class="muted">{safe(detail)}</div></div>',unsafe_allow_html=True)
 def go(page):
-    st.session_state["page"]=page
+    # Update app navigation state, not a widget-owned session-state key.
+    # This avoids Streamlit's StreamlitWidgetAlreadyInstantiatedError.
+    st.session_state["current_page"] = page
     st.rerun()
+
+def sync_navigation():
+    # Called by the sidebar radio when the user changes pages.
+    st.session_state["current_page"] = st.session_state["navigation_radio"]
 def activity(action,item):
     add("activity",{"action":action,"item":item,"when":stamp()})
 
@@ -96,14 +102,30 @@ h1,h2,h3,.brand,.hero-title,.section-title{{font-family:'Playfair Display',Georg
 today=date.today(); now=datetime.now()
 pages=["Home","Tasks & Routines","Groceries","Calendar & Reminders","Family Notes","Memories","Household Budget","Activity & Greetings","Backups & Settings"]
 labels={"Home":"🏡 Home","Tasks & Routines":"✓ Tasks & routines","Groceries":"🛒 Groceries","Calendar & Reminders":"▦ Calendar & reminders","Family Notes":"♡ Family notes","Memories":"✦ Memories timeline","Household Budget":"€ Household budget","Activity & Greetings":"☀ Greetings & activity","Backups & Settings":"⚙ Backups & settings"}
+
+# Initialise app-level navigation separately from the radio widget's state.
+if "current_page" not in st.session_state:
+    st.session_state["current_page"] = "Home"
+# Sync the radio's value BEFORE the widget is instantiated. Never assign to
+# navigation_radio later in the same run.
+st.session_state["navigation_radio"] = st.session_state["current_page"]
+
 with st.sidebar:
     st.markdown('<div class="brand">Our Family Hub</div>',unsafe_allow_html=True)
     st.caption("A calmer way to organise life, together.")
     st.caption("🌙 Dark theme · Always on")
-    page=st.radio("Navigate",pages,key="page",format_func=lambda p:labels[p],label_visibility="collapsed")
+    st.radio(
+        "Navigate",
+        pages,
+        key="navigation_radio",
+        on_change=sync_navigation,
+        format_func=lambda p: labels[p],
+        label_visibility="collapsed",
+    )
     st.divider(); st.caption("MADE FOR TWO"); st.markdown("**Suchi & Abi** 💙")
     st.caption("Small steps, big love.")
 
+page = st.session_state["current_page"]
 tasks=get("tasks"); groceries=get("groceries"); events=get("events"); notes=get("notes"); memories=get("memories"); tx=get("transactions")
 st.markdown(f'<div class="hero"><div class="hero-kicker">YOUR HOME · YOUR LITTLE WORLD</div><div class="hero-title">A little more organised.<br>A little more together.</div><div class="hero-copy">Welcome back, Suchi &amp; Abi. Keep track of everyday things, make space for the good moments, and take life one step at a time.</div><div class="muted">{today.strftime("%A, %d %B %Y")} · Made with love ♡</div></div>',unsafe_allow_html=True)
 
