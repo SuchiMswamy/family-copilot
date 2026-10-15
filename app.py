@@ -1,5 +1,6 @@
 
 import html
+import textwrap
 from datetime import date, datetime
 import streamlit as st
 
@@ -22,9 +23,9 @@ THEMES = {
         "sidebar": "#F3EAE8",
         "card": "#FFFFFF",
         "text": "#382F35",
-        "muted": "#766B72",
+        "muted": "#62545D",
         "border": "#E8DCD9",
-        "accent": "#986B80",
+        "accent": "#81536B",
         "accent_soft": "#F2E4EA",
         "input": "#FFFFFF",
         "shadow": "0 4px 20px rgba(69, 44, 53, 0.045)",
@@ -34,9 +35,9 @@ THEMES = {
         "sidebar": "#FFFFFF",
         "card": "#FFFFFF",
         "text": "#202938",
-        "muted": "#657184",
+        "muted": "#536174",
         "border": "#E1E6ED",
-        "accent": "#416A88",
+        "accent": "#315C7A",
         "accent_soft": "#EAF1F7",
         "input": "#FFFFFF",
         "shadow": "0 4px 20px rgba(30, 50, 75, 0.045)",
@@ -105,7 +106,7 @@ def card(title, description="", icon="✨", eyebrow=None):
         if eyebrow else ""
     )
     st.markdown(
-        f"""
+        textwrap.dedent(f"""
         <div class="premium-card">
             {eyebrow_html}
             <div class="card-heading">
@@ -114,14 +115,14 @@ def card(title, description="", icon="✨", eyebrow=None):
             </div>
             <div class="card-description">{safe(description)}</div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
 
 def metric_card(label, value, icon, detail):
     st.markdown(
-        f"""
+        textwrap.dedent(f"""
         <div class="metric-card">
             <div class="metric-top">
                 <span>{safe(label)}</span>
@@ -130,7 +131,7 @@ def metric_card(label, value, icon, detail):
             <div class="metric-value">{safe(value)}</div>
             <div class="metric-detail">{safe(detail)}</div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -149,7 +150,7 @@ def section_title(title, subtitle=None):
 # GLOBAL PREMIUM STYLING
 # =========================================================
 st.markdown(
-    f"""
+    textwrap.dedent(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
 
@@ -467,6 +468,50 @@ st.markdown(
         color: var(--accent);
     }}
 
+    /* Readable contrast, resilient cards, and touch-friendly controls */
+    .card-heading, .card-description, .metric-value, .metric-detail,
+    .hero-title, .hero-copy, .section-title, .section-subtitle,
+    .brand-title, .brand-subtitle, .eyebrow {{
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }}
+
+    .card-description, .metric-detail, .hero-copy, .section-subtitle,
+    .brand-subtitle, .stApp [data-testid="stCaptionContainer"] p {{
+        color: var(--muted) !important;
+    }}
+
+    .card-heading, .metric-value, .hero-title, .section-title,
+    .brand-title {{
+        color: var(--text) !important;
+    }}
+
+    .stApp input, .stApp textarea,
+    .stApp [data-baseweb="select"] > div {{
+        min-height: 44px;
+        font-size: 0.98rem;
+    }}
+
+    .stApp .stButton > button,
+    .stApp .stDownloadButton > button,
+    .stApp [data-testid="stFormSubmitButton"] > button {{
+        min-height: 46px;
+        padding: 0.55rem 1rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }}
+
+    .premium-card, .metric-card {{
+        min-width: 0;
+        overflow: hidden;
+    }}
+
+    [data-testid="stMarkdownContainer"] pre,
+    [data-testid="stMarkdownContainer"] code {{
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }}
+
     @media (max-width: 700px) {{
         [data-testid="stMainBlockContainer"] {{
             padding-top: 1rem;
@@ -479,10 +524,34 @@ st.markdown(
 
         .metric-card {{
             padding: 14px;
+            min-height: 120px;
+        }}
+
+        .card-heading {{
+            font-size: 1rem;
+            align-items: flex-start;
+        }}
+
+        .card-icon {{
+            width: 32px;
+            height: 32px;
+        }}
+
+        .section-title {{
+            font-size: 1.35rem;
+        }}
+
+        .hero-title {{
+            font-size: clamp(1.8rem, 8vw, 2.5rem);
+        }}
+
+        .stApp [data-testid="stMainBlockContainer"] {{
+            padding-left: 1rem;
+            padding-right: 1rem;
         }}
     }}
     </style>
-    """,
+    """),
     unsafe_allow_html=True,
 )
 
@@ -551,7 +620,7 @@ C = THEMES[st.session_state.theme]
 today = date.today()
 
 st.markdown(
-    f"""
+    textwrap.dedent(f"""
     <div class="hero">
         <div class="hero-kicker">YOUR HOME · YOUR LITTLE WORLD</div>
         <div class="hero-title">A little more organised.<br>A little more together.</div>
@@ -563,7 +632,7 @@ st.markdown(
             {today.strftime("%A, %d %B %Y")} &nbsp; · &nbsp; Made with love ♡
         </div>
     </div>
-    """,
+    """),
     unsafe_allow_html=True,
 )
 
@@ -976,7 +1045,7 @@ elif page == "Shopping History":
 # =========================================================
 st.markdown("---")
 st.markdown(
-    f"""
+    textwrap.dedent(f"""
     <div style="
         text-align: center;
         color: {C["muted"]};
@@ -991,6 +1060,6 @@ st.markdown(
             Small steps, big love.
         </span>
     </div>
-    """,
+    """),
     unsafe_allow_html=True,
 )
